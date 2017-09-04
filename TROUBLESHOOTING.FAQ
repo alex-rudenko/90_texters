@@ -1,0 +1,248 @@
+﻿+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+++ LINUX TROUBLESHOOTING ++
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+uptime				https://www.youtube.com/watch?v=ajtoLLGbwiI
+
+3 значения нагрузки 1,5 15 минут среднее
+можно оценить растет или спадает нагрузка
+
+Однопроцессорный:
+1=100%, если больше 1, то значит, что очереди накапливаются, призводительности недостаточно.
+
+Многопроцессорный компьютер:
+n процессоров > n*100% потенциальной возможности
+2 процессора - нагрузка 5 = перегружен...
+
+prstat -mLc		смотреть поле LAT и вообще
+
+Вообще подсчет среднего в uptime инертный.
+С учетом алгоритма подсчета - минутная загрузка 1, показала 0.65  0.22  0.11
+						   5 минутная  загрузка 1, показала 1.05  0.68  0.32
+						   15 минутная						1.05  1.00 0.68
+Помним о таком поведениии алгоритма подсчета.
+
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+vmstat key fields	https://www.youtube.com/watch?v=LMx2poY9ORM
+
+Общее здоровье системы.
+vmstat {interval} {count}
+vmstat 1 5			5 снэпов с интервалом 1 секунда
+
+procs -----------memory---------- ---swap-- -----io---- -system-- ------cpu-----
+ r  b   swpd   free   buff  cache   si   so    bi    bo   in   cs us sy id wa st
+ 2  0      0 337796 132188 439348    0    0     3     6   44   43  0  0 100  0  0
+
+procs
+r		threads in ready to run state
+		здесь может выстраиваться очередь, но при этом процессор не загружен и idle показывает достаточный запас
+		дело в том, что здесь мгновенное значение, а там среднее, размазаное значеине нагрузки
+		dtrace для более детальных вещей
+b		The number of processes in uninterruptible sleep.
+
+-----------memory----------
+swpd	своп, желательно, чтобы вообще не было
+free	свободно, основная физическая память машины
+buf		количество памяти под буферы
+cache	закэшировано на будущее, но доступно для использования
+
+---swap--
+si: Amount of memory swapped in from disk (/s).
+so: Amount of memory swapped to disk (/s).
+
+-----io----
+bi: Blocks received from a block device (blocks/s).
+bo: Blocks sent to a block device (blocks/s).
+
+-system--
+in: The number of interrupts per second, including the clock.
+cs: The number of context switches per second.
+
+------cpu-----
+us		userspace cpu (programs)
+sy		system cpu (syscallt, ints e.t.c.)
+id		idle этому можно доверять, т.к. достаточно точное усредненное значение
+wa      Time spent waiting for IO.
+
+
+vmstat all fields	https://www.youtube.com/watch?v=f5JsJnDTPyc
+Расшифровал выше :) Solaris specific
+
+vmstat scope		https://www.youtube.com/watch?v=Um7-aw4kUDw
+
+
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+mpstat
+
+mpstat {delay} {count}
+mpstat 1 5
+
+cat /proc/cpuinfo
+
+mpstat -P ALL
+посмотреть распределение нагрузки по процесорам, это пока все, что мне надо знать, похоже.
+
+03:29:29 PM : means the time that mpstat was run
+all : means All CPUs
+%usr : show the percentage of CPU utilization that occurred while executing at the user level (application)
+%nice : show the percentage of CPU utilization that occurred while executing at the user level with nice priority
+%sys : show the percentage of CPU utilization that occurred while executing at the system level (kernel)
+%iowait : show the percentage of time that the CPU or CPUs were idle during which the system had an outstanding disk I/O request
+%irq : show the percentage of time spent by the CPU or CPUs to service hardware interrupts
+%soft : show the percentage of time spent by the CPU or CPUs to service software interrupts
+%steal : show the percentage of time spent in involuntary wait by the virtual CPU or CPUs while the hypervisor was servicing another virtual processor
+%guest : show the percentage of time spent by the CPU or CPUs to run a virtual processor
+%idle : show the percentage of time that the CPU or CPUs were idle and the system did not have an outstanding disk I/O equest
+
+mpstat key fields	https://www.youtube.com/watch?v=gQSh2sx9JsE
+mpstat all fields	https://www.youtube.com/watch?v=SavopP9idQQ
+mpstat deeper		https://www.youtube.com/watch?v=aw8AZzAKUy0
+
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+Стратегия, когда мы отлавливаем проблемный процесс, нам надо его PID:
+
+Поиск процесса:
+top или ps  в помощь
+
+Сеть:
+iptraf синяя псевдографическая утилита
+
+Системные вызовы:
+strace		трассировка системных вызовов, в моем понимании скорее крайняя мера
+			когда базовое попробовали и обдумали
+			
+strace -p PID		способы запуска
+strace firefox
+
+
+atop не пропустит короткие процессы, которые пропустит top
+
+
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+Доклад 2016:
+https://www.youtube.com/watch?v=CbmEDXq7es0
+
+#1
+uptime				быстро смотрим на среднюю 1,5,15 минут загрузку и определяем динамику
+					в Linux не только CPU, так что не очень верим формуле load/cpus
+					
+#2
+top					не ловит быстрые процессы, можно не увидеть их, а загрузка будет высокой
+					atop - пытались исправить такое поведение
+					
+#3
+htop				псевдографическая, цветная, настраиваемая
+					экран перерисовывается, можно потерять, то на что смотришь
+					
+#4
+vmstat
+vmstat -Sm 1		смотрим r, очередь готовых к исполнению... и прочее память - проц
+
+#5
+iostat				статистика по блочным девайсам
+iostat	-xmdz 1		много полезной информации, утилизация, wait
+
+#6
+free				статистика по памяти
+free -m
+
+#7
+strace				трассировка системных вызовов, ОСТОРОЖНО, может сильно затормозить все (на базе ptrace сделана вроде)		
+strace -tttT -p {PID}	если надо - то надо, но осторожно ! в настоящее время переписывается...
+
+#8
+tcpdump				проблемы с 10Gb и более быстрыми адаптерами... сложно снять и проанализировать поток
+					сейчас пишут яденое приложение для решения задач
+
+#9
+netstat
+-s					статистика по протоколам
+-i					статистика по интерфейсам
+-r					таблица маршрутизации
+-c					интервал в секундах
+-p					!!! информация по процессу !!!
+default				список соединений
+
+#10
+slabtop				использование памяти ядром
+
+#11
+pcstat				показать количество страниц под фаил ? полезная для анализа БД
+
+#12
+perf				perf_events (tools/perf или apt-get install linux-tools-common)
+					много что может
+
+
+Anti - Methodologies.
+- lack of a deleborate methodology  -  непонимание что происходит, гугление наугад и т.д.
+- street light anti method  -  крутимся вокруг инструментов, которые знаем снова и снова
+- drunk man anti-method		-	настраивать по рэндому пока проблема не уйдет :)
+
+Methodologies:
+- Linux performance analysis in 60 seconds
+- the USE method
+- CPU profile method
+- Recource Analysis
+- Workload Analysis
+- Others
+  -- workload characterization
+  -- drill-down analysis
+  -- off-CPU analysis
+  -- Static performance tuning
+  -- 5 whys
+  -- ...
+  
+[ Linux performance analysis in 60 seconds ]
+1 uptime			> load averages
+2 dmesg | tail			> kernel errors
+3 vmstat 1			> overall stats by time
+4 mpstat -P ALL 1		> CPU balance
+5 pidstat 1			>  process usage
+6 iostat -xz 1			> disk I/O
+7 free -m			> memory usage
+8 sar -n DEV 1			> network I/O
+9 sar -n TCP,ETCP 1		> TCP stats
+10 top				> check overview
+
+[ USE Method ]
+1 Utilization
+2 Saturation
+3 Errors
+Для каждого ресурса ищем метрики под эти 3 критерия.
+На сайте brandangregg.com есть список под разные задачи.
+http://brendangregg.com/USEmethod/use-rosetta.html
+
+[ CPU Profile Method ]
+-Take CPU Profile
+-understand all software in profile >1%
+
+[ Resource Analysis ]
+apps									
+systel libraries
+system calls
+kernel				/\/\/\/\/\/\
+hadrware			снизу вверх
+
+[ workload Analysis ]
+apps				сверху вниз
+systel libraries		\/\/\/\/\/\/
+system calls
+kernel
+hadrware
+
+Benchmarking... 100% неверные, не абсолютная объективная мера...
+Иногда не то измеряем, не так, не так понимаем результат и т.д.
+
+В современных системах мониторим шины памяти, т.к. становятся узким местом...
+Иногда какжется, что в процессоре, а на самом деле нет.
+
+Profiling.
+Perf. Perf_events...
+
+Flame Graphs for perf events:
+
+git clone --depth 1 https://github.com/brendangregg/FlameGraph
+cd FlameGraph
+perf record -F 99 –g -a -- sleep 30
+perf script | ./stackcollapse-perf.pl |./flamegraph.pl > perf.svg

@@ -1,0 +1,1004 @@
+###############
+##### AWK #####
+###############
+
+Links:
+
+http://www.gnu.org/software/gawk/manual/gawk.html    #офиц документация
+http://pement.org/awk/awk1line.txt    #однострочники и т.д.
+https://www.ibm.com/developerworks/library/l-awk1   #ресурс от IBM
+https://www.ibm.com/developerworks/library/l-awk2
+
+=====================================================================================================
+## Commands FAQ ##
+
+Program strusture: awk 'PATTERN{ACTION} PATTERN{ACTION}... e.t.c.' datafile.txt
+
+'   '    #AWK program text
+{   }    #ACTION
+/   /    #REGEX PATTERN
+
+Flags:
+    -f  #to execute awk progra from file
+    -F  #to set field seprator
+        -F, аналогично -F ,  пробел опционален
+        -F ABC  #разделитель из нескольких символов
+        -F '[,!]'  #разделители через regex
+    -v  #to set variable
+
+$0        #whole source string
+
+NF        #number of fields
+NR        #number of records
+FILENAME  #filename
+FNR       #number of fields in file
+
+Strings:
+
+length
+index
+match
+substr
+sub
+gsub
+split
+
+Math:
+
+int
+rand
+srand
+sqrt
+sin
+cos
+atan2
+log
+exp
+
+=====================================================================================================
+## Lynda Course Memos ##
+
+
+
+
+######
+##0301
+cat names.txt
+Alexey Rudenko
+Tetiana Laptieva
+
+awk '{print $2, $1}'  #реверс имени фамилии
+    {} - говорит, что инструкция должна быть применена к каждой строке ввода
+    print - печатать
+    $1, $2 - поля, по умолчанию разделенные whitespace 
+
+
+
+
+######
+##0302
+
+AWK воспринимает файлы, как records (строки) and fields (столбцы), separated by whitespace.
+
+${НОМЕР} - номер поля, например:
+
+awk '{print $3}' dukeofyork.txt  # напечатать третий столбец каждой строки
+$0 - это сама исходная строка
+awk '{print}'  #напечатает все строки целиком
+awk '{print $0}'  #аналогично
+
+#ЗАПЯТАЯ
+
+cat names.txt
+Alexey Rudenko
+Tetiana Laptieva
+
+awk '{print $2, $1}' names.txt  #!! запятая здесь - это field separator (по умолчанию - пробле)
+Rudenko Alexey
+Laptieva Tetiana
+
+#если убрать запятую - concatination, слепит поля в строке в один текст
+awk '{pirnt $2 $1}' names.txt
+RudenkoAlexey
+LaptievaTetiana
+
+#если хотим между именем и фамилией запятую и пробел:
+awk '{print $2 ", " $1}' names.txt
+Rudenko, Alexey
+Laptieva, Tetiana
+
+!!! Программа awk: PATTERN + ACTION
+
+awk '{print}' file.txt  #в скобках ACTION
+awk '{print NF, $0}' file.txt  #аналогично, в скобках ACTION, выводит количество полей в начале строки + строки исходного файла
+
+awk '/up/{print NF, $0}' file.txt  #здесь есть PATTERN, говорящий выводить только строки, в которых есть up...
+# здесь есть /REGEX/ между слэшами
+
+awk 'NF==6{print NF, $0}' file.txt  #здесь PATTERN, говорящий выводить строки, в которых ровно 6 полей
+# здесь есть условие
+
+!!! МОЖНО использовать PATTERN БЕЗ ACTION, т.к. default action - печатать строку
+awk 'NF==6' file.txt  # здесь результат аналогичен предыдущему выражению с ACTION
+
+!!! МОЖНО ИСПОЛЬЗОВАТЬ НЕСКОЛЬКО PATTERNS
+awk '/up/{print "UP", NF, $0} /down/{print "DOWN:", NF, $0}' file.txt
+!!! ЕСЛИ в одной строке несколько совпадений, то строка выведется по каждому совпедению:
+
+cat file.txt
+some text up or down
+awk '/up/{print "UP", NF, $0} /down/{print "DOWN:", NF, $0}' file.txt
+UP: 5 some text up or down
+DOWN: 5 some text up or down
+
+
+
+
+######
+##0303
+AWK cli flags.
+
+
+-f  #awk program file
+    awk -f filename.awk textfile.txt #filename.awk содержит программу AWK, textfile.txt - данные, с которыми работаем
+                                 !! внутри файла не надо использовать '...', т.к. программа уже в файле и не надо защищаться от shell
+-F  #field separator (default whitespace)
+    awk '{print $2}'  #будет читать stdin и попускать через программу, здесь разделитель по умолчанию - whitespace
+    one two three
+    two
+    one,two,three
+
+    ctrl+d
+    awk -F , '{print $2}'  #awk -F , == awk -F,  пробел между -F и разделителем опционален
+    one two three
+
+    one,two,three
+    two
+    ctrl+d
+
+awk -Ft  # в некоторых реалзациях бует использовать таб, как разделитель
+
+-v  #задает переменню
+    awk -v hi=HELLO '{print $2, hi}'
+    one two
+    two HELLO
+
+AWK: input / output data 
+
+==input==
+
+-as a file, can be many files
+    awk '{...}' file1.txt file2.txt file3.txt e.t.c
+    awk '{...}' < filename.txt
+
+-standard input (no input file specified)
+    awk '{   }'
+
+-piped
+    uptime | awk '{print NF, $0}'
+
+==output==
+
+-to file
+    awk '{print NF, $0}' text.txt > awk.out
+
+-piped
+    awk '{print NF, $0}' text.txt | sort -n
+
+ 
+
+######
+##0401
+
+Strings - records
+Fields - raws
+
+Whitespace - default separator, any combination of space and tab.
+
+-F  #задаем разделитель
+Если задали что-то кроме whitespace - то space\tab\whitespace = field
+
+Повторяющийся подряд разделитель - ограничивает пустое поле.
+
+awk -F, '{print $2}'
+one,,three
+                #empty
+,two,three
+two
+
+#разделитель может состоять из нескольких символов
+awk -F ABC '{print $2}'
+oneABCtwoABCthree
+two
+ 
+#можно задать разделитель через REGEX
+awk -F '[,!]' '{print $2}'
+one,two!three
+two
+
+
+
+######
+##0402
+
+FIELDS
+
+Можно задать разделитель полей через переменную:
+!!! ВАЖНО !!!
+awk '{FS=","; print $2}'
+one,two,three
+                #empty, ЗДЕСЬ ПУСТОЙ ВЫВОД ПОТОМУ, ЧТО ПЕРЕМЕННАЯ ПРИСВОИТСЯ ВМЕСТЕ С ДЕЙСТВИЕМ, А ДО ТОГО - ДЕФОЛТ !!!
+four,five,six
+five            #здесь уже присвоилось новое значение разделителя и все ок !! 
+!!! ТАКОЕ ПОВЕДЕНИЕ ОБХОДИТСЯ С ПОМОЩЬЮ BEGIN !!!
+awk 'BEGIN{FS=","} {print $2}'
+one,two,three
+two  #ВСЕ ОК СРАЗУ !!
+
+
+RECORDS
+
+По умолчанию RECORD = строка, но если вдруг файл не поделен на строки ??
+cat onebigline.txt 
+1,2,3!4,5,6!,7,8,9
+#МОЖЕМ ЗАДАТЬ RECORD SEPARATOR
+awk'BEGIN{RS="!";FS=","} {print $2} onebigline.txt
+2
+5
+8
+
+#есть специальный вариант для RS - пустая строка !!! 
+#в этом случае любая последовательность из одной и более пустых строк расценивается, как RS
+#удобно для преобразования файлов типа:
+
+cat address.txt
+Alexey
+02095
+Kiev
+
+Alexander
+664025
+Irkutsk
+awk 'BEGIN{RS="";FS="\n"} {name=$1;zip=$2;city=$3;print name "," zip "," city}' address.txt
+Alexey,02095,Kiev
+Alexander,664025,Irkutsk
+
+#OUTPUT has OFS, ORS аналогично INPUT
+
+cat names.txt
+Alexey Rudenko
+Tetiana Laptieva
+awk 'BEGIN{OFS=", ";ORS="!"} {print $2,$1}' names.txt
+Rudenko, Alexey!Laptieva, Tetiana
+
+!!! OFS не работает для $0, т.к. $0 - выдает единое значение, а не поделенное на поля !!!!
+
+
+
+
+######
+##0403
+Практика
+######
+##0404
+Практика
+
+
+
+
+######
+##0501
+Built-in variables.
+
+# NF
+NF - number of fields (записей в строке)
+awk 'NF==6{print NF, $0}' file.txt - распечатать строки в которых 6 полей: кол-во полей + строка
+
+awk '{print, $NF}' file.txt - распечатать последний элемент каждой строки
+awk '{print, $(NF-1)}' file.txt - распечатать предпоследний элемент каждой строки
+awk '{print, $NF-1}' file.txt - выдаст -1 для каждой строки, т.к. для word числовое значение -.
+
+Возможны извращения типа:
+awk '{print $($1)}'
+2 one two three
+one
+4 one two three
+three
+
+# NR
+NR - nimber of records (строк)
+awk 'NR==6{print NR, $0}' file.txt - распечатать 6 строку: номер строки + строка
+
+awk 'NR==6{print NR, $0}' 1.txt 2.txt - распечатает 2 файла с номерами строк подряд, нумерация непрерывная по 2 файлам подряд.
+
+# FILENAME - имя обрабатываемого файла
+# FNR - номер строки в файле
+
+awk 'NR==6{print NR, FILENAME, FNR, $0}' 1.txt 2.txt - нумерация всех строк подряд, имя файла, номер строки внутри файла + содержимое строки.
+
+# $0 - строка целиком
+# $N - поле N строки
+
+Можно не только печатать значения полей, но и заменять их:
+awk '{$2="TWO"; print}' file.txt - эта программа заменит значения всех полей $2 на TWO. Это происходит в памяти и не меняет исходный файл.
+
+Можно добавлять поля, которых нет. Допустим, максимальное количество полей в строке файла было 10.
+Мы можем добавить поле 11, после чего длина всех строк станет 11, а в строки будет добавлено соответствующее количество разделителей.
+awk '{$11="ELEVEN"; print NF, $0}' file.txt
+Визуализируем разделители:
+awk 'BEGIN{OFS="!"} {$11="ELEVEN"; print NF, $0}' file.txt
+Считаем восклицательные знаки :)
+
+Можно переписывать значение $0, это поменяет содержимое вывода и NF в соответствии с тем, что пропишем, НО сохранит количество строк исходного файла !!!
+awk '{$0="one two three"; print NF, $2}' file.txt
+3 two - столько раз, сколько строк в файле
+
+
+
+
+######
+##0502
+User-defined variables.
+Можно задавать пользовательские переменные.
+Нет необходимости объявлять их заранее, они создаются в тот момент, как использованы.
+В свзи с этим - внимательнее с именами, т.к. можно создать не то, что хочется 
+
+!!Переменные CASE SENSITIVE !!
+!! В awk все переменные не жестко типизированы и испоьзуются, как number или string в зависимости от контекста. !!
+!! Integer to float преобразыется автоматически при необходимости !!
+!! Если точно нужна цифра, прибавляем к значению 0 !!
+
+awk '{hello=$1; goodbye=$2; print ehllo, goodbye}'
+one two
+ two        # !!!!!!! здесь пытались распечатать ошибочно заданную переменную ehllo и она была создана, как пустая строка в момент обрадения к ней.
+
+awk '{a=$1; A=$2; print a,A}'
+one two
+one two
+
+awk '{a=1;b=2; print a + b}'  #арифметика
+4
+awk '{a=1;b=2; print a b}'    #сложение строк
+13
+awk '{a=1;b="bob"; print a + b}'  #арифметика, "bob" имеет числовое значение 0
+1
+awk '{a=1; b=3; print a/b}'
+0.333333
+
+Можно подправить тип:
+awk '{print "one"}'
+one
+awk '{print "one" + 0}' - математическая операция, результат число
+0
+awk '{print "1" ""}'
+1  # !! здесь строка, т.к. конкатенация с пустой строкой
+
+Порядок операций:
+awk '{a=1; b=2; c=3; print a b * c}'
+16  # 1 concat 2 * 3, умножение выполнилось раньше конкатенации
+
+Скобки помогают изменить порядок:
+awk '{a=1; b=2; c=3; print (a b) * c}'
+36  # (1 concat 2) * 3
+
+
+Большой пример:
+awk '{print "\"" $1"\+ 0 =" $1 +0}'
+123
+"123"+ 0 = 123
+6.5
+"6.5"+ 0 = 6.5
+4e3
+"4e3"+ 0 = 4000
+-2.3
+"-2.3"+ 0 = -2.3
+0023
+"0023"+ 0 = 23
+66abc               # !!!! если начинается с цифр, но потом текст, то текст игнорируется !!!!
+"66abc"+ 0 = 66
+abc66               # !!!! а здесь наоборот - если началось с текста, то всегда 0, независимо от того, есть ли цифры в строке  далее !!!!
+"abc66"+ 0 = 0
+
+!!! По умолчанию ВСЕ ПЕРЕМЕННЫЕ ГЛОБАЛЬНЫЕ !!!
+
+
+
+
+######
+##0503
+Операторы и массивы.
+Operators and arrays.
+
+# Простые математические операторы
++,-,*,/,%,^
+
+# Операторы инкримента
+++,--
+Используются:
+++a или a++, разница очевидна
+
+# Операторы присвоения
+=,+=,-=,*=,/=,%=,^=
+
+# Операторы сравнения
+
+ОБЫЧНЫЕ
+==,!=,<,<=,>,>=
+
+REGEX
+~,!~
+
+# МАССИВЫ, БАЗОВЫЕ ПОНЯТИЯ (arrays, basics)
+awk '{a[1]=$1; a[2]=$2; a[3]=$3; print a[1], a[2], a[3]}'
+one two three
+one two three
+
+#!!!! Если переменная использована с [], то она становится массивом и никак иначе уже использоваться не может !!!!
+
+
+
+
+######
+##0601
+REGEX Basics
+
+!! CASE SENSITIVE !!
+Простой пример:
+/abc/ matches "abc", "xxxabcx" | doesn't match "abxxc", "ab", "ABC"
+
+Иногда строка может использоваться, как RegEx там, где ожидается RegEx...   
+
+echo 'one two up down' > 1.txt
+awk '/up/{print "UP:", $0'} /down/{print "DOWN:", $0}' 1.txt
+UP: one two up down                                   #здесь 2 срабатывания на одну строку, т.к. 
+DOWN: one two up down
+
+awk '{$3 ~ /up/{print}' 1.txt       #Значение 3 поля up, используем RegEx
+one two up down
+
+Метасимволы в RegEx:
+
+.    # любой 1 символ
+\    # экранирование специальных символов типа \. или \\ или \/ напимер надо "a/b" делаем a\/b
+^    #начало строки /^abc/ matches abcd | doesn't match dabc
+$    #конец строки /abc$/ matches dabc | doesn't match abcd
+    
+ЗДЕСЬ НЕОБХОДИМО ПОМНИТЬ, ЧТО ПРИ РАБОТЕ С ПОЛЯМИ, ^ и $ относятся к конкретному полю...
+/abc/ - поле содержит abc
+/^abc/ - поле начинается с abc
+/abc$/ - поле заканчивается abc
+
+
+
+
+######
+##0602
+Character classes and quantifiers.
+
+[abc]   #set of characters, matches any of a,b,c
+        #this set in [] is called character class
+/a[xyz]c/    #matches "axc" or "ayc" e.t.c., BUT not "axyc" or not "axyzc", ONY ONE CHARACTER !!
+
+EXAMPLES
+[a-z],[A-L],[0-9],[a-zA-Z]
+/a[!a-z]c/   # matches a.c a9c BUT not abc or not aTc
+ 
+*    #zero or more repeats of previous item
+
++    #one or more repeats
+/ab+c/ matches "abc","abbbc", BUT NOT "ac"
+
+?    #z ero or one repeats exactly
+/ab?c/    #matches "abc", "abbc", "ac" BUT does NOT match "abbbc"
+
+{n}    #exact number of item repeats, here - n repeats
+/ab{3}c/    #matches "abbbc"
+{n,}    #n or MORE repeats
+{n,m}    #range n-m repeats
+
+(ab)+   #define element to repeat, matches ab, abab, ababab e.t.c.
+
+!!!! QANTIFIERS ARE GREEDY BY DEFAULT !!!!
+
+<i>italic text</i>
+
+/<.+>/    #matches all of <i>italic text</i>
+/<[^>]+>/    #matches <i> only
+
+
+
+
+######
+##0701
+Control structures.
+
+#IF
+
+if ( condition) {
+    if-statement(s)
+}    #Скобки опциональны, но хороший тон - использовать их ВСЕГДА !
+
+if ( condition ) {
+    if-statement(s)
+} else {
+    else-statement(s)
+}
+
+ПРИМЕР:
+awk '{ if (NF < 8) { print "short line:", $0 } else { print "long line:", $0} }'
+
+Это тот момент, когда удобнее уже размещать программу в файле...
+awk -f program.awk file.txt
+
+#FOR
+
+for ( initialization; condition; increment ) {
+    body
+}
+
+ПРИМЕР:
+for ( i=1; i<=3; i++ ) {
+    print "Line " NR ", field " i ": " $i;
+}
+
+
+
+
+######
+##0702
+Creating an HTML table.
+
+Типовая задача - сконвертировать данные в таблицу, возможно с сопутствующими вычислениями.
+
+Входные данные - файл со структурой типа (счет по игрокам и играм):
+Alex 10 20 12 15 16 12 9
+Ivan 8 13 21 4 10 24 1
+Итого, имя + 7 полей...
+
+Сделаем генератор html:
+
+#сделаем заголовок таблицы
+BEGIN {
+    FS="\t";
+    print "<table>";
+    print "<tr>";
+    print "\t<th>Name</th>";
+    for ( i=1;i<=7; i++ ) {
+        print "\t<th>Round", i "</th>";
+    }
+}
+#добавим в таблицу данные из файла, здесь хардкод ширины таблицы, но можно использовать NF, правда тогда надо для выводы header искать другие варианты,
+типа прочитать хотя бы одну строку
+{
+    print "<tr>";
+    print "\t<td><b>" $1 "</b></td>";    #вывод имени жирным
+    for ( i=2; i<=8; i++ ) {
+        print "\t<td>" $i "</td>";
+        total[i] +=$i;                   #делаем total по столбцам
+    }
+    print "</tr>";
+}
+# в конце посчитаем средние
+END {
+    print "<tr>";
+    print "\t<td><b><i>Average</i></b></td>";
+    for ( i=2; i<=8; i++ ) {
+        print "\t<td><i>" int(total[i] /NR) "</i></td>";
+    }
+    print "<tr>"
+    print "</table>"
+}
+
+
+
+
+######
+##0703
+
+######
+##0704
+Задание, пример того, что awk не особо подходит для парсинга html.
+Тут проверяли соответствие тэга открывающего и закрывающего тэгов
+
+
+
+
+######
+##0801
+Formatting output with printf().
+
+printf ( format, value ... )
+Задается формат, в котором указано что выводится и в каком формате будут представлены выводимые значения переменных.
+Значения подставляются по порядку.
+
+Типовой сценарий - преобразование вида:
+Alex RRR,alexrrr@mail.ru,224.1231324
+к виду:
+Alex RRR    alexrrr@mail.ru    224.1231324
+
+awk -F, '{printf("%s\t%s\t%d\n", $1 $2 $3)}' inputfile.txt   # !!! %d - это integer и отбросит дробную часть... и данной ситуации это норм...НО !!!
+
+
+
+
+######
+##0802
+Formatting output with width and presicion.
+
+awk -F, '{printf("%s\t%s\t%d\n", $1 $2 $3)}' inputfile.txt
+!! Здесь вывод зависит от исходных жанных и может быть некрасивым для длинных имен или мэйлов, использовать таб, как разделитель - не айс. !!
+
+Зададим ширину полей вывода:
+Это минимальное количество символов для вывода поля, если значение меньше - оно дополняется слева пробелами.
+При этом если значение не поместится в размер, оно, таки будет показано полностью с нарушением форматирования !
+
+awk -F, '{printf("%20s %30s %3d\n", $1 $2 $3)}' inputfile.txt       # !!! здесь выравнивание по правой границе
+awk -F, '{printf("%-20s %-30s %-3d\n", $1 $2 $3)}' inputfile.txt    # !!! а здесь выравнивание по левой границе !!!
+
+Вывод floating point значений !!
+%d        #integer
+%f        #floating point !!! ПО УМОЛЧАНИЮ -6 ЗНАКОВ ПОСЛЕ ЗАПЯТОЙ !!!
+%6.2f     #6 = общая длина вывода, 2 - знаки после запятой
+
+awk -F, '{printf("%-20s %-30s %-3f\n", $1 $2 $3)}' inputfile.txt
+
+!!!!! ПРИМЕР ФОРМАТИРОВАНИЯ FLOAT:
+
+123.121211223
+90.731241321
+%f
+123.121211
+90.731241
+%6f
+123.121
+90.7312
+%6.2f
+123.12
+90.73
+%06.2f
+123.12
+090.73
+
+!!!!!
+
+ИТОГО, на самоа деле ЕСТЬ ДОФИГА ФОРМАТОВ КРОМЕ %s, %d, %f, RTFM !!!
+
+
+
+
+######
+##0901
+Manipulating strings.
+
+!!! awk нумерует символы в строке с 1 !!!
+
+length( [string] )    #возвращает длину строки, если нет указан аргумент - длину $0
+
+index( string, target )    #проверяет, есть ли вхождение target в string и возвращает позицию первого вхождения или 0, если вхождения нет
+
+match(string, RegEx)    #подобна index, но сопоставляет с RegEx (greedy !)
+                        #возвращает номер первого вхождения, а также устанавливает переменные RSTART и RLENGTH
+                        #регулярка greedy и потому зацепит максимальное соответствие !!!
+                        # match("antidisestablishmentarianism", /b[a-z]*n/)
+                        # returns 12
+                        # RSTART 12
+                        # RLENGTH 14
+                        # matches "blishmentarian", НЕ "blishmen"
+
+substr( string, start pos, length)    #вернет подстроку string с позиции start длиной length
+                                      #если length не указана - вернет строку от start до конца
+                                      #substr("antidisestablishmentarianism", 12, 5)
+                                      #blish
+                                      #substr("antidisestablishmentarianism", 12)
+                                      #blishmentarianism
+
+ВСЕ эти операции со строками часто используются в сочетании. ПРИМЕР remove the:
+
+BEGIN {
+    target = "the"
+}
+{
+    s = index($0, target);
+    if ( s == 0 ) {
+        print;
+    } else {
+       print substr($0, 1 s-1) substr ($0, s+ length(target));
+    }
+}
+
+!! Ну по факту то мы тут вырезаем первое вхождение the... :))
+!!! Есть способ делать такое проще !!!
+
+sub(regexp, newval[,string])    #замена в строке. Совпадение по regxep заменяется на newval. Если не указана переменная string, то используется $0.
+
+awk '{sub(/the/,""); print}' inputfile.txt   #здесь заменим первое вхождение the на пустое значение.
+awk '{sub(/the[ym]/,"ALL"); print}' inputfile.txt    # а здесь заменим все превые вхожде ния they/them на ALL
+
+gsub(regexp, newval[,string])    #замена в строке ГЛОБАЛЬНО. Совпадение по regxep заменяется на newval. Если не указана переменная string, то используется $0.
+
+split(syting, array[, regexp])    #берет string и разбивает на элементы array использую regexp в качестве разделителя
+                                  #возвращает количество элементов, которые были найдены
+                                  #если regexp не указано, то используется значение FS в качестве разделителя элементов
+
+Пример использования split:
+
+inputfile.txt
+Alexey Rudenko,alex@mail.ru,123.456
+
+awk -F, 'BEGIN{OFS="\t"} {split($1, a, / /); print a[2]", "a[1], $2,$3}' intutfile.txt
+Rudenko, Rudenko   alex@mail.ru    123.456
+#здесь в выводе \t в качестве разделителя, задали OFS
+
+ЕСТЬ КУЧА ФУНКЦИЙ ЕЩЕ, RTFM !!!!!!
+
+
+
+
+######
+##0902
+Arrays, associative arrays.
+
+В awk мощные массивы, можно в качестве индексов использовать строки и т.д.
+
+awk '{a["first"]=$1; a["second"}=$2; a["third"]=$3; print a["third"], a["second], a["first"]}'
+1 2 3
+3 2 1
+
+Для работы цикла по элементам ассоциативного массива - специальная форма:
+
+for ( index in array ) {
+    body
+}
+
+
+
+
+!!! при такой работе ПОРЯДОК ПЕРЕБОРА ЭЛЕМЕНТОВ НЕ ГАРАНТИРУЕТСЯ !!!
+awk '{a["first"]=$1; a["second"}=$2; a["third"]=$3; for ( i in a ) { print i, a[i] } }'
+1 2 3
+second 2
+first 1
+third 3
+!! Вывел все, порядок - как получилось !!
+
+
+
+
+Более полезный пример, подсчет слов в тексте:
+
+words.awk
+{
+    for ( i=1; i<=NF; i++ ) {
+        words[tolower($i)]++;
+    }
+}
+END {
+    for ( i in words ) {
+        print i, words[i];
+    }
+}
+
+awk -f words.awk inputfile.txt | sort | more #добавили сортировку слов по алфавиту, т.к. для цикла не гарантируется порядок и добавили more, чтобы разбить вывод
+awk -f words.awk inputfile.txt | sort -rn -k 2 | more #здесь более логичная сортировка по убыванию по второй колонке вывода
+
+
+
+
+awk поддерживает одномерные массивы, но можно симулировать многомерный массив, используя ассоциативный массив:
+Пример с транспонированием вывода !!!
+
+{
+    for ( i=1; i<=NF, i++ ) {
+        a[NR ":" i] = $i;
+    }
+    if ( NF > maxNF) {
+        maxNF = NF;
+    }
+}
+# сперва эмулируем двумерный индекс из составной строки
+# параллельно для каждой строки проверяем максимальное кол-во полей и запоминаем среди них максимальное
+END {
+    for ( field=1; field<=maxNF; field++ ) {
+       for ( rec=1; rec<=NR; rec++ ) {
+           printf ( "%-10s", a[rec ":" field]);
+       }
+       printf("\n");
+    }
+}
+
+
+
+
+######
+##0903
+Awk math functions.
+
+int(x)        #возвращает целочисленную часть
+
+rand()        #возвращает float число от 0 до 1, 0 может быть, 1 - нет.
+              #если надо генерировать random целое число от 1 до 6, то
+              #   int(rand() * 6) + 1
+
+srand([x])    #инициализация генератора сл. чисел, если не сделать, то по умолчанию rand возвращает одну и ту же последовательность псевдослучайных чисел
+              # если на задавать х, ты будет использоваться текущая дата время
+
+sqrt(x)       #кв. корень
+
+sin(x)        #в радианах
+cos(x)
+
+atan2(y,x)    #atan2(0,-1) = pi
+
+log(x)
+exp(x)
+
+
+
+
+######
+##1001
+Using pipes
+
+В общем, глава про пайпы.
+
+Пример:
+ls -l | awk '/\.txt/{total += $5; print} END{print total}'   # выведем список txt файлов и посчитаем их суммарный размер
+
+Часто сочетают AWK и SED, AWK для записей и полей, SED для посимвольных манипуляций с файлами.
+
+Допустим:
+ls -lF > out.txt   #здесь были файлы awk как обычные, так и исполняемые... и в выводе   команды, к именам исполняемых добавится *
+                   #допустим, есть проблема выполнить команду по новой, но есть вывод. Можно использовать sed перед awk, чтобы срезать звезды.
+
+sed 's/\*$//' out.txt | ls -l | awk '/\.awk/{total += $5; print} END{print total}'   #в этом случае все файлы .awk попадут под регулярку
+                                                                                     #( не пропустит .awk*, sed срезал *)
+
+Тут еще пример с преобразованием неконсистентных списков рассылок.
+
+
+
+######
+##1002
+Parsing MS Excel CSV files. Line endings and quotes.
+
+Это типачная задача для awk, и она не из простых...
+
+!!! ПЕРЕВОД СТРОК  - MS использует ^M (DOS) окончания строк
+!!! КАВЫЧКИ        - MS вместо " ,будет вставлять """ в CSV.... , и перевод строки тоже будут в ""
+
+excelparser.awk
+BEGIN { RS="\r" }                                             #это фиксим перевод строки
+{
+    for ( i=1; i<=3 здесь 3 столбца в примере; i++ ) {
+        gsub("^\"|\"$", "", $i);                              #а здесь пофиксили кавычки для полейЮ которые целиком в кавычках (типа значение поля "one")
+        gsub("\"\"","\"", $i);
+    }
+    print "!" $1 "!" $2 "!" $3
+}
+
+
+
+
+
+######
+##1003
+Parsing MS Excel CSV files. Commas and new lines.
+
+Если сделать CSV файл с запятой в качестве разделителя полей и внутри поля есть запятая - то невозможно различить разделитель поля и просто запятую внутри поля !!!
+ПОЭТОМУ делаем другой (зависит от контекста) разделитель !!! \t - хороший выбор, т.к. внутри Excel сложно использовать tab :))
+
+Одна из самых сложных проблем - наличие переноса строки в ячейке Excel !!! :)))))))))))))))))))))
+
+
+Один из вариантов решения проблемы:
+
+BEGIN { RS="\r" }                                             #это фиксим перевод строки
+{
+    while ( $NF ~ /^".*[^"]$/ ) {
+        getline x;
+        $0 = $0 "\n" x;
+    }
+    for ( i=1; i<=3 здесь 3 столбца в примере; i++ ) {
+        gsub("^\"|\"$", "", $i);                              #а здесь пофиксили кавычки для полейЮ которые целиком в кавычках (типа значение поля "one")
+        gsub("\"\"","\"", $i);
+    }
+    print "!" $1 "!" $2 "!" $3
+}
+
+В общем, тут тоже слабые стороны... мы предполагаем, что значения полей в кавычках, а это не факт... в общем, удачи с CSV и AWK :)))))
+
+
+
+
+######
+##1004
+Scripting with AWK.
+
+Здесь рассказ о том, как писать SHELL скрипты для рутинных задач.
+
+/----------------------------------/
+#!/bin/bash
+
+awk -Ft 'BEGIN {
+    print "<h1>Contuct Us!,/h1>";
+    print "<ul>";
+}
+
+NR > 1 { #skip header line
+    print "<li>";
+    print $1, $2, $3 ": "; #office, first name, last name
+    print "<a href=\"mailto:" $12 "\" $12 "</a>"; #email
+    print "<li>";
+}
+
+END {
+    print "</ul>";
+}' $1 > officers.html #здесь $1 - первый аргумент БАШ скрипта, используется для передачи файла на ввод awk программы
+/----------------------------------/
+
+
+
+
+######
+##1005
+
+######
+##1006
+
+Хороший пример JOIN через ассоциативные массивы, хороший пример split.
+
+
+
+
+
+
+
+
+
+
+
+
+
+=====================================================================================================
+## Examples ##
+awk '{ printf "# "; print; }' /etc/fail2ban/jail.conf | sudo tee /etc/fail2ban/jail.local #комментим начало файла
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

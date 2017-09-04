@@ -1,0 +1,1576 @@
+﻿  ### DOCKER ###
+
+=====================================================================================================
+<<< Brief manual >>>
+
+== Common ==
+docker -v
+docker version
+docker info
+
+docker run -it centos /bin/bash	тестовый запуск на базе Centos
+
+docker start ID/name
+docker stop ID/name		отправить SIGTERM процессу с PID1 внутри контейнера
+docker kill -s SIG ID/name	отправить POSIX SIG (i.e. KILL, HUP e.t.c.) процессу с PID1 в контейнере
+docker restart ID/name		перезапуск контейнера
+
+docker attach ID/name			присоединиться к std in/out/err процесса с pid1
+docker exec - it ID/name /bin/bash	запустить проесс в контейнере, способ подключиться, вместо attach, т.к. PID1 далеко не всегда bash...
+
+docker inspect ID/name		КУЧА информации по контейнеру !!
+
+docker ps			активные
+docker ps -a			все, какие запускали
+docker ps -l 			покажет последний контейнер, который работал и завершился
+
+docker rm ID/name		удалить конетйнер
+docker rm -f ID/name		удалить force, в том числе и запущенный
+
+docker rmi IID			delete image with ID (list with docker images command)
+
+docker rm -v ID/name		удалить Volume, с диска
+
+docker top ID/name		посмотреть процессы внутри контейнера
+
+docker logs ID/name		посмотреть активность внутри контейнера
+docker logs -f ID/name		follow logs = tail -f
+
+docker port web1		посмотреть какие порты выставлены наружу и промаплены
+
+
+== Images ==
+Images - build time constuct
+
+docker pull fedora			выкачать latest
+docker pull -a fedora			выкачать все доступные версии fedora
+docker pull coreos/apache:latest	указали версию latest
+
+docker tag ID/name name/repo:version	добавить тэг, для выкладывания в репозиторий, можно при создании сделать
+
+docker build -t TAG PATH		создаем свой файл из Dockerfile
+
+docker images			список images
+docker images --tree
+docker images fedora		столько разных версий fedora, сколько разных ID, внимательно с этим
+
+*образы хранятся:	/var/lib/docker/<storage driver>/...
+в ubuntu		/var/lib/docker/aufs/...
+
+== Containers ==
+Containers - run time constuct
+
+docker
+run				запуск
+-i				interactive
+-t				assign sudo tty (attach to container)
+-d				dettached
+-l debug			log level [debug|info|error|fatal]
+-p 5000:5000			пробров порта из контейнера на хост, на хостe мэпится на 0.0.0.0:5000 = на все интерфейсы
+  host^	  ^container		ВАЖНО !!! -p HOST_PORT:CONTAINER_PORT !!!
+-p 5002:80/udp			пробпрос 80 порта контейнера на 5002 порт хоста по udp
+-p 192.168.56.50:5003:80	мэпинг на конкретный IP хоста (192.168.56.50 порт 5003)
+-P				примапить все порты из директивы EXPOSE автоматически на хост, используя highnumber ports по рэндому !!
+-v hostfolder/containerfolder	привязка томов хоста к контейнеру
+--cpu-shares=256		limit CPU usage		RTFFM МНОГО ВСЕГО !
+--memory=1g			limit memory
+--name=net2			задать имя, не random, а свое !	
+--dns=8.8.4.4			задать DNS в параметрах	
+ubuntu				image name to build from (latest)
+ubuntu:14.04.1			exact version PREFERED !!!
+/bin/bash			что запускаем внутри контейнера, может быть что угодно, если оно есть внутри контейнера
+docker run -it ubuntu /bin/bash					подключимся к std in/out/err процесса /bin/bash
+docker run -d centos /bin/bash -c "ping 8.8.8.8 -c 60"		затустим dettached, отработает 60 пингов и завершится
+
+docker run  -it -v /test-vol --name=voltainer ubuntu:16.04 /bin/bash	создать том
+docker run -it --volumes-from="voltainer" ubuntu:16.04 /bin/bash	использовать том
+
+!!! CTRL + P + Q !!!		выйти без остановки контейнера
+
+docker history fridge		посмотреть каими командами был создан образ
+
+docker save -o /tmp/fridge.tar fridge	сохранить образ fridge в файл fridge.tar для переноса
+docker load -i /tmp/fridge.tar		импортировать контейнер после переноса
+
+== Dockerfile ==
+# Comment, description e.t.c.
+FROM			какая ОС
+MAINTAINER		кто сделал
+RUN			команды shell, установка софта и т.д.
+EXPOSE			разрешить проброс перечисленных портов
+ENV			переменные окружения
+VOLUME			
+CMD			запуск в стиле CMD / default parameters для ENTRYPOINT
+ENTRYPOINT		приложение с PID1, что собственно запускаем
+
+== /etc/default/docker ==
+
+
+DOCKER-OPTS="--bip=150.150.0.1/24"		bip = bridge ip, указали, что хотим использовать 150.150.0.0/24
+DOCKER_OPTS="--log-level=fatal"			уровень логирования
+
+DOCKER_OPTS="--iptables=false/true"		разрешено ли изменять iptables, тут запрещено
+DOCKER_OPTS="--icc=false/true"			разрешено ли docker-docker взаимодействие
+
+
+=====================================================================================================
+<<< КУРС >>>
+
+  ++ Ubuntu ++
+apt-get update
+apt-get install docker.io (есть одноименный пакет)
+
+  # Из под рута:
+docker -v
+docker version
+docker info		полезная, инфо о контейнерах и т.д.
+
+Штука клиент-серверная.
+Тэги: aufs, lib container / LXC
+
+  # Для работы нормальных пользователей добавляем их в группу docker
+sudo gpasswd -a rudenko docker		добавить rudenko в группу docker
+
+  # Пробный запуск:
+docker run -it ubuntu /bin/bash
+exit					выход
+
+  # Docker не обязательно слушает локальный сокет, может работать по сети.
+  ++ Ubuntu ++
+docker -H 77.120.2.198:2375 -d &					сеть, порт 2375 по умолчанию
+docker -H 77.120.2.198:2375 -H unix:///var/run/docker.sock -d &		и сеть и сокет
+
+  # Пробуем развернуть контейнер (Centos based на Ubuntu)
+  ++ Ubuntu ++
+docker run -it centos /bin/bash			стартовали контейнер
+Все как полноценный линукс. Centos пoд Ubuntu. По сути так и есть, супер облегченный.
+Если что - то изменили в контейнере, оно там и лежит :) все вполне настоящее...
+exit
+
+docker ps		ничего не покажет, мы вышли
+docker ps -a		а вот тут все контейнеры видно, когда запускались и т.д.
+
+CONTAINER ID        IMAGE               COMMAND             CREATED             STATUS                      PORTS               NAMES
+dd98d16aa1b7        centos:latest       "/bin/bash"         4 minutes ago       Exited (0) 5 seconds ago                        admiring_brattain
+08b59ca90d53        ubuntu:latest       "/bin/bash"         34 minutes ago      Exited (0) 34 minutes ago                       loving_carson
+f1e8677825ff        ubuntu:latest       "/bin/bash"         34 minutes ago      Exited (0) 34 minutes ago                       determined_brattain
+
+root@GW01:/home/rudenko# ls -l /var/lib/docker/aufs/diff/
+total 60
+drwxr-xr-x 21 root root 4096 Jun  9 14:16 031c24a19e4b1631a74dff3fda414aa92792d2a484bd60a3bf4d5ea600a2351a
+drwxr-xr-x  5 root root 4096 Jun  9 14:17 08b59ca90d53faa606855e9dc11c8fd4c8d15be45f47776873b4d1c9d816a306
+drwxr-xr-x  6 root root 4096 Jun  9 14:16 08b59ca90d53faa606855e9dc11c8fd4c8d15be45f47776873b4d1c9d816a306-init
+drwxr-xr-x  2 root root 4096 Jun  9 14:46 2a332da70fd138adb862334e01a9c0a2e35019a7faf2526b31f81c41c8d31c7e
+drwxr-xr-x  2 root root 4096 Jun  9 14:46 3690474eb5b4b26fdfbd89c6e159e8cc376ca76ef48032a30fa6aafd56337880
+drwxr-xr-x  2 root root 4096 Jun  9 14:16 594b6e305389ce5151e289d96b1e0e1df3c86d1bd8d208c997ecbcdfd6e320a0
+drwxr-xr-x  3 root root 4096 Jun  9 14:16 81756f259b61041e3d6ea918a0fcb8173422d0fab39c3b25cc6c107d9747d82d
+drwxr-xr-x  6 root root 4096 Jun  9 14:16 84387ed57eeec1bb788d28848df1e5b3956423e3f21b53816beca4f82a3aa8fe
+drwxr-xr-x 17 root root 4096 Jun  9 14:46 b48a20c39b28a40b4b4a5badff6e0be750acca61ca06a150d156b0f5da811ba5
+drwxr-xr-x  2 root root 4096 Jun  9 14:46 c79ebe41b35ad980d18c4b055e7ee190aaf67f6fdc1881c98d37da89ae3fb1c1
+drwxr-xr-x  7 root root 4096 Jun  9 14:50 dd98d16aa1b779afa13b19e7236bd7489217c2d4cf96eab5e343461ce520e9b5
+drwxr-xr-x  6 root root 4096 Jun  9 14:46 dd98d16aa1b779afa13b19e7236bd7489217c2d4cf96eab5e343461ce520e9b5-init
+drwxr-xr-x  3 root root 4096 Jun  9 14:16 ed3bfbcc08f720e3f72ccc5d118841fcee208e27ba7d49a611ce60274e62973c
+drwxr-xr-x  5 root root 4096 Jun  9 14:16 f1e8677825ffe071de150357ebba0f20645ce85510c89d23cd176b1d6c170b04
+drwxr-xr-x  6 root root 4096 Jun  9 14:16 f1e8677825ffe071de150357ebba0f20645ce85510c89d23cd176b1d6c170b04-init
+
+!! ТАК ВОТ, ДАННЫЕ ИЗ КОНТЕЙНЕРА МОЖНО ПРОСМОТРЕТЬ ПО ПУТИ, НАЧИНАЮЩЕМОСЯ С CONTAINER SHORT ID !!
+!! Можно перезапустить контейнер:
+
+docker start dd98d16aa1b7		старт
+docker attach dd98d16aa1b7		подключение к процессу с PID1 (/bin/bash)
+					подключение в смысле подключение к std in/out/err
+
+  # Images
+docker run -it fedora /bin/bash		на базе fedora latest (не указывали версию, по умолчанию latest)
+Unable to find image 'fedora:latest' locally		надо качать
+latest: Pulling from fedora
+
+6aeaf6268e0a: Pull complete				
+3690474eb5b4: Already exists
+Digest: sha256:cfd8f071bf8da7a466748f522406f7ae5908d002af1b1a1c0dcf893e183e5b32
+Status: Downloaded newer image for fedora:latest
+
+Качает образ, слоями, если есть повторяющиеся - не качает их.
+
+docker pull fedora		выкачать latest
+docker pull -a fedora		выкачать все доступные версии fedora
+
+root@GW01:/# docker pull fedora
+latest: Pulling from fedora
+
+3690474eb5b4: Already exists
+6aeaf6268e0a: Already exists
+Digest: sha256:cfd8f071bf8da7a466748f522406f7ae5908d002af1b1a1c0dcf893e183e5b32
+Status: Image is up to date for fedora:latest
+root@GW01:/# docker pull -a fedora
+Pulling repository fedora
+750c135e60d0: Download complete
+bd5c015f260c: Download complete
+257a189a77d7: Download complete
+92139c385e28: Download complete
+6aeaf6268e0a: Download complete
+3690474eb5b4: Download complete
+Status: Downloaded newer image for fedora
+root@GW01:/#
+
+root@GW01:/# docker images fedora
+REPOSITORY          TAG                 IMAGE ID            CREATED             VIRTUAL SIZE
+fedora              rawhide             257a189a77d7        3 months ago        250.7 MB
+fedora              23                  6aeaf6268e0a        3 months ago        204.7 MB
+fedora              latest              6aeaf6268e0a        3 months ago        204.7 MB
+fedora              22                  92139c385e28        3 months ago        188.7 MB
+fedora              heisenbug           bd5c015f260c        8 months ago        290.6 MB
+fedora              21                  750c135e60d0        8 months ago        241.3 MB
+
+Смотрим на Image ID, 23 и latest это один образ, одинаковый ID
+
+  # Containers
+root@GW01:/# docker ps -a
+CONTAINER ID        IMAGE               COMMAND             CREATED             STATUS                      PORTS               NAMES
+12b86e70e2c8        fedora:latest       "/bin/bash"         33 minutes ago      Up About a minute                               insane_hypatia
+558068d11512        centos:latest       "/bin/bash"         22 hours ago        Exited (0) 57 minutes ago                       boring_rosalind
+dd98d16aa1b7        centos:latest       "/bin/bash"         22 hours ago        Exited (0) 22 hours ago                         admiring_brattain
+08b59ca90d53        ubuntu:latest       "/bin/bash"         23 hours ago        Exited (0) 23 hours ago                         loving_carson
+f1e8677825ff        ubuntu:latest       "/bin/bash"         23 hours ago        Exited (0) 23 hours ago                         determined_brattain
+
+root@GW01:/# docker start 12b86e70e2c8
+12b86e70e2c8				при запуске возвращает ID
+
+root@GW01:/# docker ps
+CONTAINER ID        IMAGE               COMMAND             CREATED             STATUS              PORTS               NAMES
+12b86e70e2c8        fedora:latest       "/bin/bash"         34 minutes ago      Up About a minute                       insane_hypatia
+
+root@GW01:/# docker attach 12b86e70e2c8
+[root@12b86e70e2c8 /]#
+!!! Выйти без остановки контейнера CTRL + P + Q !!!
+
+  # Docker HUB	hub.docker.com
+
+-> hub.docker.com				registry for docker
+  --> bunch of official repos inside 		ubuntu, mongo ... stuff we can trust, смотрим official flag
+  --> user repos				users repositories (например radial/nginx, типа как в vagrant)
+						!! стоит запускать только то, чему доверяем !!
+
+  # Image Layers
+
+Образы многослойные !
+
+...     e.t.c.   ...		...
+Layer 2		(Image 2)	Updates
+Layer 1		(Image 1)	Nginx
+Layer 0		(Image 0)	Например, Ubuntu OS minimum
+
+Зачем так делать ?
+
+-> во - первых, нам понравилась версия убунты, мы ее зафиксировали, подогнали софт положили сверху,
+обновили... (при этом мы сохранили golden ubuntu image !)
+
+!!! мы сохранили базовый конфиг базовой системы !!! 	базовый образ, который подготовлен Canonical,
+!!! Поставили настроили Nginx !!!			лежит неизменный в основе, сверху слои с результатами
+!!! и так с каждым слоем !!!				нашей работы и все ОК !
+
+Все на своих местах, как слои в фотошопе ! Работа на перекрытие !
+
+-> во-вторых, базовый образ Ubuntu может использоваться многими контейнерами - экономия места !
+	
+  # Union mounts
+
+UUID2	Layer 2		(Image 2)	Updates
+UUID1	Layer 1		(Image 1)	Nginx
+UUID0	Layer 0		(Image 0)	Ubuntu
+
+У каждого слоя свой ID, между слоями выстраиваются отношения,
+более высокий слой перекрывает нижние при наличии одинаковых путей !
+Так работает Union Mounts !!!
+
+Что происходит в Docker: при запуске контейнера ФС собирается путем наложения слоев в режиме
+Read Only ! Верхние слои перекрывают нижние при наличии дублирующихся путей.
+В процессе запуска ПОВЕРЖ ВСЕГО docker добавляет Read/Write слой, в котором мы можем работать,
+что создает иллюзию обычной работы и по сути ничем не отличается для нас от нее.
+
+[	! Read/Write layer, добавляется при запуске контейнера !	]
+[ UUID2	Layer 2		(Image 2)	Updates		!! Read ONLY	]
+[ UUID1	Layer 1		(Image 1)	Nginx		!! Read ONLY	]	
+[ UUID0	Layer 0		(Image 0)	Ubuntu (rootfs)	!! Read ONLY	]
+[  вообще тут есть еще bootfs, нас не интересует, уходит после старта	]
+
+!!! ВСЕ ИЗМЕНЕНИЯ В КОНТЕЙНЕР ПИШУТСЯ В ВЕРХНИЙ R/W УРОВЕНЬ !!!
+
+  # Where images stored
+
+docker pull coreos/apache:latest
+docker images
+docker images --tree
+
+root@GW01:/# docker images
+REPOSITORY          TAG                 IMAGE ID            CREATED              VIRTUAL SIZE
+centos              latest              2a332da70fd1        7 days ago           196.8 MB
+ubuntu              latest              594b6e305389        2 weeks ago          122 MB
+fedora              rawhide             257a189a77d7        3 months ago         250.7 MB
+fedora              23                  6aeaf6268e0a        3 months ago         204.7 MB
+fedora              latest              6aeaf6268e0a        3 months ago         204.7 MB
+fedora              22                  92139c385e28        3 months ago         188.7 MB
+fedora              heisenbug           bd5c015f260c        8 months ago         290.6 MB
+fedora              21                  750c135e60d0        8 months ago         241.3 MB
+coreos/apache       latest              87026dcb0044        2.325916 years ago   294.4 MB
+root@GW01:/# docker images --tree
+Warning: '--tree' is deprecated, it will be removed soon. See usage.
+-031c24a19e4b Virtual Size: 122 MB
+¦ L-84387ed57eee Virtual Size: 122 MB
+¦   L-ed3bfbcc08f7 Virtual Size: 122 MB
+¦     L-81756f259b61 Virtual Size: 122 MB
+¦       L-594b6e305389 Virtual Size: 122 MB Tags: ubuntu:latest
++-3690474eb5b4 Virtual Size: 0 B
+¦ +-b48a20c39b28 Virtual Size: 196.8 MB
+¦ ¦ L-c79ebe41b35a Virtual Size: 196.8 MB
+¦ ¦   L-2a332da70fd1 Virtual Size: 196.8 MB Tags: centos:latest
+¦ +-257a189a77d7 Virtual Size: 250.7 MB Tags: fedora:rawhide
+¦ +-6aeaf6268e0a Virtual Size: 204.7 MB Tags: fedora:23, fedora:latest
+¦ +-92139c385e28 Virtual Size: 188.7 MB Tags: fedora:22
+¦ +-bd5c015f260c Virtual Size: 290.6 MB Tags: fedora:heisenbug
+¦ L-750c135e60d0 Virtual Size: 241.3 MB Tags: fedora:21
+L-511136ea3c5a Virtual Size: 0 B
+  L-6170bb7b0ad1 Virtual Size: 0 B
+    L-9cd978db300e Virtual Size: 204.4 MB
+      L-87026dcb0044 Virtual Size: 294.4 MB Tags: coreos/apache:latest
+
+Рассмотрим последние 4 уровня и как это организовано в AUFS:
+
+511136ea3c5a
+6170bb7b0ad1
+9cd978db300e
+87026dcb0044
+
+!!! Вот так выстроена иерархия в aufs !!!
+root@GW01:/# cat /var/lib/docker/aufs/layers/87026dcb00443eb7f1725b1c9f4fb8210027a19364103854a1e5f606b95019ff
+9cd978db300e27386baa9dd791bf6dc818f13e52235b26e95703361ec3c94dc6
+6170bb7b0ad1003a827e4dc5253ba49f6719599eac485db51eaafd507c13c311
+511136ea3c5a64f264b78b5433614aec563103b4d4702f3ba7d4d2698e22c158
+root@GW01:/# cat /var/lib/docker/aufs/layers/9cd978db300e27386baa9dd791bf6dc818f13e52235b26e95703361ec3c94dc6
+6170bb7b0ad1003a827e4dc5253ba49f6719599eac485db51eaafd507c13c311
+511136ea3c5a64f264b78b5433614aec563103b4d4702f3ba7d4d2698e22c158
+root@GW01:/# cat /var/lib/docker/aufs/layers/6170bb7b0ad1003a827e4dc5253ba49f6719599eac485db51eaafd507c13c311
+511136ea3c5a64f264b78b5433614aec563103b4d4702f3ba7d4d2698e22c158
+root@GW01:/# cat /var/lib/docker/aufs/layers/511136ea3c5a64f264b78b5433614aec563103b4d4702f3ba7d4d2698e22c158
+!!! Последовательные иерархически организованные ссылки между слоями !!!
+
+А вот где лежат реальные файлы слоя:
+(это для слоя 031c24a19e4b, ubuntu:latest)
+
+root@GW01:/# ls -alF /var/lib/docker/aufs/diff/031c24a19e4b1631a74dff3fda414aa92792d2a484bd60a3bf4d5ea600a2351a/
+total 84
+drwxr-xr-x 21 root root 4096 Jun  9 14:16 ./
+drwxr-xr-x 32 root root 4096 Jun 10 19:12 ../
+drwxr-xr-x  2 root root 4096 May 25 23:11 bin/
+drwxr-xr-x  2 root root 4096 Apr 12 20:14 boot/
+drwxr-xr-x  4 root root 4096 May 25 23:11 dev/
+drwxr-xr-x 42 root root 4096 May 25 23:11 etc/
+drwxr-xr-x  2 root root 4096 Apr 12 20:14 home/
+drwxr-xr-x  8 root root 4096 Sep 13  2015 lib/
+drwxr-xr-x  2 root root 4096 May 25 23:11 lib64/
+drwxr-xr-x  2 root root 4096 May 25 23:11 media/
+drwxr-xr-x  2 root root 4096 May 25 23:11 mnt/
+drwxr-xr-x  2 root root 4096 May 25 23:11 opt/
+drwxr-xr-x  2 root root 4096 Apr 12 20:14 proc/
+drwx------  2 root root 4096 May 25 23:11 root/
+drwxr-xr-x  5 root root 4096 May 25 23:11 run/
+drwxr-xr-x  2 root root 4096 May 25 23:11 sbin/
+drwxr-xr-x  2 root root 4096 May 25 23:11 srv/
+drwxr-xr-x  2 root root 4096 Feb  5 09:48 sys/
+drwxrwxrwt  2 root root 4096 May 25 23:11 tmp/
+drwxr-xr-x 10 root root 4096 May 25 23:11 usr/
+drwxr-xr-x 11 root root 4096 May 25 23:11 var/
+
+  # Copying images to Other host
+
+-> Pull/push to dockerhub
+
+-> Old school way :)
+
+docker run ubuntu /bin/bash -c "echo 'cool content' > /tmp/cool-file"
+
+root@GW01:/# docker ps -a
+CONTAINER ID        IMAGE               COMMAND                CREATED             STATUS                     PORTS               NAMES
+28a55980a486        ubuntu:latest       "/bin/bash -c 'echo    8 seconds ago       Exited (0) 8 seconds ago                       hopeful_blackwell
+12b86e70e2c8        fedora:latest       "/bin/bash"            6 hours ago         Up 6 hours                                     insane_hypatia
+558068d11512        centos:latest       "/bin/bash"            28 hours ago        Exited (0) 7 hours ago                         boring_rosalind
+dd98d16aa1b7        centos:latest       "/bin/bash"            28 hours ago        Exited (0) 28 hours ago                        admiring_brattain
+
+Наш верхний :))
+
+docker commit 28a55980a486 fridge		закоммитили изменение в образ fridge
+
+root@GW01:/# docker images
+REPOSITORY          TAG                 IMAGE ID            CREATED              VIRTUAL SIZE
+fridge              latest              800ff80c1544        About a minute ago   122 MB
+debian              latest              736e5442e772        22 hours ago         125.1 MB
+centos              latest              2a332da70fd1        7 days ago           196.8 MB
+ubuntu              latest              594b6e305389        2 weeks ago          122 MB
+...
+Вон он самый первый лежит :)))
+
+root@GW01:/# docker images --tree
+Warning: '--tree' is deprecated, it will be removed soon. See usage.
++-7d7852532044 Virtual Size: 125.1 MB
+¦ L-736e5442e772 Virtual Size: 125.1 MB Tags: debian:latest
++-031c24a19e4b Virtual Size: 122 MB
+¦ L-84387ed57eee Virtual Size: 122 MB
+¦   L-ed3bfbcc08f7 Virtual Size: 122 MB
+¦     L-81756f259b61 Virtual Size: 122 MB
+¦       L-594b6e305389 Virtual Size: 122 MB Tags: ubuntu:latest
+¦         L-800ff80c1544 Virtual Size: 122 MB Tags: fridge:latest
+Вот он на базе Ubuntu лежит :))
+
+root@GW01:/# docker history fridge
+IMAGE               CREATED             CREATED BY                                      SIZE
+800ff80c1544        3 minutes ago       /bin/bash -c echo 'cool content' > /tmp/cool-   13 B
+594b6e305389        2 weeks ago         /bin/sh -c #(nop) CMD ["/bin/bash"]             0 B
+81756f259b61        2 weeks ago         /bin/sh -c sed -i 's/^#\s*\(deb.*universe\)$/   1.895 kB
+ed3bfbcc08f7        2 weeks ago         /bin/sh -c rm -rf /var/lib/apt/lists/*          0 B
+84387ed57eee        2 weeks ago         /bin/sh -c set -xe                                                  && echo '#!/bin/sh' > /u   701 B
+031c24a19e4b        2 weeks ago         /bin/sh -c #(nop) ADD file:025ef672711f22be39   122 MB
+
+А тут видно, какими командами контейнер создан !!
+Очевидно, что наши изменения по факту добавили 13 байт к shared base, а это значит,
+что очень эффективно и экономично используем дисковое пространство.
+
+docker save -o /tmp/fridge.tar fridge	вообще делает tar по умолчанию, но мы так решили, -o = output
+
+root@GW01:/# ls -lh /tmp
+total 122M
+-rw-r--r-- 1 root root 122M Jun 10 19:40 fridge.tar
+Вот результат :)) можем скопировать без проблем.
+
+root@GW01:/# tar -tf /tmp/fridge.tar
+031c24a19e4b1631a74dff3fda414aa92792d2a484bd60a3bf4d5ea600a2351a/
+031c24a19e4b1631a74dff3fda414aa92792d2a484bd60a3bf4d5ea600a2351a/VERSION
+031c24a19e4b1631a74dff3fda414aa92792d2a484bd60a3bf4d5ea600a2351a/json
+031c24a19e4b1631a74dff3fda414aa92792d2a484bd60a3bf4d5ea600a2351a/layer.tar
+594b6e305389ce5151e289d96b1e0e1df3c86d1bd8d208c997ecbcdfd6e320a0/
+594b6e305389ce5151e289d96b1e0e1df3c86d1bd8d208c997ecbcdfd6e320a0/VERSION
+594b6e305389ce5151e289d96b1e0e1df3c86d1bd8d208c997ecbcdfd6e320a0/json
+594b6e305389ce5151e289d96b1e0e1df3c86d1bd8d208c997ecbcdfd6e320a0/layer.tar
+800ff80c1544b4c9c228a10b279c3f02ebd2fbb29b8ebccb8d5bd9c337f38f63/
+800ff80c1544b4c9c228a10b279c3f02ebd2fbb29b8ebccb8d5bd9c337f38f63/VERSION
+800ff80c1544b4c9c228a10b279c3f02ebd2fbb29b8ebccb8d5bd9c337f38f63/json
+800ff80c1544b4c9c228a10b279c3f02ebd2fbb29b8ebccb8d5bd9c337f38f63/layer.tar
+81756f259b61041e3d6ea918a0fcb8173422d0fab39c3b25cc6c107d9747d82d/
+81756f259b61041e3d6ea918a0fcb8173422d0fab39c3b25cc6c107d9747d82d/VERSION
+81756f259b61041e3d6ea918a0fcb8173422d0fab39c3b25cc6c107d9747d82d/json
+81756f259b61041e3d6ea918a0fcb8173422d0fab39c3b25cc6c107d9747d82d/layer.tar
+84387ed57eeec1bb788d28848df1e5b3956423e3f21b53816beca4f82a3aa8fe/
+84387ed57eeec1bb788d28848df1e5b3956423e3f21b53816beca4f82a3aa8fe/VERSION
+84387ed57eeec1bb788d28848df1e5b3956423e3f21b53816beca4f82a3aa8fe/json
+84387ed57eeec1bb788d28848df1e5b3956423e3f21b53816beca4f82a3aa8fe/layer.tar
+ed3bfbcc08f720e3f72ccc5d118841fcee208e27ba7d49a611ce60274e62973c/
+ed3bfbcc08f720e3f72ccc5d118841fcee208e27ba7d49a611ce60274e62973c/VERSION
+ed3bfbcc08f720e3f72ccc5d118841fcee208e27ba7d49a611ce60274e62973c/json
+ed3bfbcc08f720e3f72ccc5d118841fcee208e27ba7d49a611ce60274e62973c/layer.tar
+repositories
+
+А это структура TAR, на каждый слой 3 файла, как видим !!
+
+docker load -i /tmp/fridge.tar		разворачиваем на новом компе, -i = import
+
+  # The Top Writable Layer of Containers.
+
+TOP WRITABLE LAYER только один на контейнер и изначально ПУСТОЙ !
+Слои собираются с перекрытием, все кроме верхнего READ ONLY !!!
+
+  # One Process per Container
+В нормальных условиях мы планируем использовать 1 процесс на контейнер !
+
+root@GW01:/# docker run -d centos /bin/bash -c "ping 8.8.8.8 -c 60"
+978701f98ca48bd66f38279a47273e5ee6d4a03b333e5fb7bd82062ec05433ea
+
+Работает
+root@GW01:/# docker ps
+CONTAINER ID        IMAGE               COMMAND                CREATED             STATUS              PORTS               NAMES
+978701f98ca4        centos:latest       "/bin/bash -c 'ping    6 seconds ago       Up 5 seconds                           dreamy_cori
+Вышел
+root@GW01:/# docker ps
+CONTAINER ID        IMAGE               COMMAND             CREATED             STATUS              PORTS               NAMES
+В истории
+root@GW01:/# docker ps -a
+CONTAINER ID        IMAGE               COMMAND                CREATED              STATUS                          PORTS               NAMES
+978701f98ca4        centos:latest       "/bin/bash -c 'ping    About a minute ago   Exited (0) 4 seconds ago                            dreamy_cori
+
+  # Commands for working with containers
+docker run
+-i				interactive
+-t				tty
+-d				dettached
+--cpu-shares=256		limit CPU usage
+--memory=1g			limit memory
+!!! RTFM !!!
+
+docker inspect ID/name		информация о контейнере !!! КУЧА ИНФОРМАЦИИ !!!
+docker attach ID/name		присоединиться к контейнеру
+
+  # Starting & Stopping Containers
+
+[		      CONTAINER			    ]
+[own file system] [own networking] [own process tree]
+
+Контейнеры можно: start / stop / restart
+
+root@GW01:/# docker run -it ubuntu:14.04 /bin/bash
+root@8da0811db067:/#
+
+CTRL + P + Q			dettach from container
+
+root@GW01:/# docker ps
+CONTAINER ID        IMAGE               COMMAND             CREATED             STATUS              PORTS               NAMES
+8da0811db067        ubuntu:14.04        "/bin/bash"         47 seconds ago      Up 46 seconds                           compassionate_pasteur
+
+root@GW01:/# docker stop 8da0811db067
+8da0811db067
+root@GW01:/# docker ps
+CONTAINER ID        IMAGE               COMMAND             CREATED             STATUS              PORTS               NAMES
+
+Контейнер остановлен, stop отправляет SIGTERM => CONTAINERS PID1
+Container terminates, when containers PID1 terminatets (SIGTERM, SIGKILL... e.t.c.)
+
+docker kill -s SIGNAL ID/name		можем отправить процессу с PID1 любой POSIX SIGNAL
+
+docker ps -l 				покажет последний контейнер, который работал и завершился
+
+root@GW01:/# docker ps -l
+CONTAINER ID        IMAGE               COMMAND             CREATED             STATUS                       PORTS               NAMES
+8da0811db067        ubuntu:14.04        "/bin/bash"         5 minutes ago       Exited (130) 3 minutes ago                       compassionate_pasteur
+root@GW01:/# docker start 8da0811db067
+8da0811db067
+root@GW01:/# docker attach 8da0811db067
+root@8da0811db067:/#
+CTRL+P+Q
+root@GW01:/# docker restart 8da0811db067
+8da0811db067
+root@GW01:/# docker ps
+CONTAINER ID        IMAGE               COMMAND             CREATED             STATUS              PORTS               NAMES
+8da0811db067        ubuntu:14.04        "/bin/bash"         10 minutes ago      Up 2 seconds                            compassionate_pasteur
+
+docker restart ID/name			перезапуск контейнера
+
+  # PID 1 and  Containers
+
+PID1 в системе является родительским для все процессов, при неоюходимости подбирает покинутые процессы,
+при получении SIGTERM будет стараться корректно завершить все дочерние процессы.
+
+PID1 в контейнере - это то приложение, которое мы собственно запускаем.
+Когда PID1 получает SIGTERM, он завершается и если запущено что - то еще,
+оно завершится как получится, скоре всего жестко.
+Это причина, почему ONE APP PER CONTAINER !!!
+
+Но технически нет ограничения на количество процессов внутри контейнера !
+Вроде можно вообще впихнуть туда init и что - то еще.
+Люди делают и используют, можно найти в сети такие контейнеры.
+
+			ИТОГО !!
+
+	"One process per container"		BEST PRACTICE
+	  -one concern per container
+	  -lean
+  	  -simple
+
+	We can run multiple processes per container.
+
+  # Deleting containers
+
+docker rm ID/name
+docker rm -f ID/name			force (for running e.t.c.)
+
+root@GW01:/# docker rm 28a55980a486
+28a55980a486
+
+root@GW01:/# docker ps
+CONTAINER ID        IMAGE               COMMAND             CREATED             STATUS              PORTS               NAMES
+8da0811db067        ubuntu:14.04        "/bin/bash"         34 minutes ago      Up 24 minutes                           compassionate_pasteur
+root@GW01:/# docker rm 8da0811db067
+Error response from daemon: Conflict, You cannot remove a running container. Stop the container before attempting removal or use -f
+FATA[0000] Error: failed to remove one or more containers
+root@GW01:/# docker rm -f 8da0811db067
+8da0811db067
+
+МНОГО используем docker ps ->    alias dps="docker ps" .... также можно еще много чего посокращать...
+
+  # Looking inside containers
+
+docker top ID/name
+
+root@GW01:/# docker top c02b69e6bf528373e886fc8480e39dbfe541c96ac5239922ea28e3056dc84d10
+UID                 PID                 PPID                C                   STIME               TTY                 TIME                CMD
+root                26114               4036                0                   11:25               ?                   00:00:00            ping 8.8.8.8
+
+root@GW01:/# docker run -d phusion/baseimage
+f19780c58e162117b67ff447e72da83e072fb2e2527b81e349abb4759a8310fb
+root@GW01:/# docker ps
+CONTAINER ID        IMAGE                      COMMAND             CREATED             STATUS              TS               NAMES
+f19780c58e16        phusion/baseimage:latest   "/sbin/my_init"     5 seconds ago       Up 5 seconds                         sharp_lalande
+
+Запустили контейнер, в котором много процессов и есть имиитация INIT,
+Смотрим top из системы хоста и видим процессы в конетйнере, НО PID1 НЕТ !!
+С точки зрения ОС хоста это обычные процессы, однако...
+root@GW01:/# docker top sharp_lalande
+UID                 PID                 PPID                C                   STIME               TTY                 TIME                CMD
+root                30943               4036                0                   10:43               ?                   00:00:00            /usr/bin/python3 -u /sbin/my_init
+root                31031               30943               0                   10:43               ?                   00:00:00            /usr/bin/runsvdir -P /etc/service
+root                31032               31031               0                   10:43               ?                   00:00:00            runsv syslog-forwarder
+root                31033               31031               0                   10:43               ?                   00:00:00            runsv cron
+root                31034               31031               0                   10:43               ?                   00:00:00            runsv syslog-ng
+root                31035               31031               0                   10:43               ?                   00:00:00            runsv sshd
+root                31036               31032               0                   10:43               ?                   00:00:00            tail -F -n 0 /var/log/syslog
+root                31037               31033               0                   10:43               ?                   00:00:00            /usr/sbin/cron -f
+root                31038               31034               0                   10:43               ?                   00:00:00            syslog-ng -F -p /var/run/syslog-ng.pid --no-caps
+
+Зайдем в контейнер и посмотрим какие процессы запущены:
+root@GW01:/# docker exec -it sharp_lalande /bin/bash
+root@f19780c58e16:/# ps
+  PID TTY          TIME CMD
+   20 ?        00:00:00 bash
+   35 ?        00:00:00 ps
+root@f19780c58e16:/# ps aux
+USER       PID %CPU %MEM    VSZ   RSS TTY      STAT START   TIME COMMAND
+root         1  0.0  0.9  28228  9448 ?        Ss   10:43   0:00 /usr/bin/python3 -u /sbin/my_init
+root         8  0.0  0.0    196    36 ?        S    10:43   0:00 /usr/bin/runsvdir -P /etc/service
+root         9  0.0  0.0    176     4 ?        Ss   10:43   0:00 runsv syslog-forwarder
+root        10  0.0  0.0    176     4 ?        Ss   10:43   0:00 runsv cron
+root        11  0.0  0.0    176     4 ?        Ss   10:43   0:00 runsv syslog-ng
+root        12  0.0  0.0    176     4 ?        Ss   10:43   0:00 runsv sshd
+root        13  0.0  0.0   7480   792 ?        S    10:43   0:00 tail -F -n 0 /var/log/syslog
+root        14  0.0  0.2  26752  2716 ?        S    10:43   0:00 /usr/sbin/cron -f
+root        15  0.0  0.6  63672  6856 ?        S    10:43   0:00 syslog-ng -F -p /var/run/syslog-ng.pid --n
+root        20  0.1  0.3  18144  3288 ?        Ss   10:45   0:00 /bin/bash
+root        36  0.0  0.2  15572  2080 ?        R+   10:45   0:00 ps aux
+root@f19780c58e16:/# exit
+
+С точки зраения контейнера есть процесс с PID1 !!!
+
+root@GW01:/# docker logs sharp_lalande
+*** Running /etc/my_init.d/00_regen_ssh_host_keys.sh...
+*** Running /etc/rc.local...
+*** Booting runit daemon...
+*** Runit started as PID 8
+Jun 12 10:43:07 f19780c58e16 syslog-ng[15]: syslog-ng starting up; version='3.5.3'
+А вот логи активности внутри контейнера...
+
+  # Lowlevel container inf (config.json, hostconfig.json)
+
+docker inspect ID/name
+  ->state
+  ->networking
+  ->host PID
+  -> e.t.c. куча информации...
+
+  # Getting Shell in a container
+
+docker attach		подключает к std in/out/err процесса с PID1, но это едва ли shell в production
+
+shh			можно, но в большинстве конетйнеров не будет ssh !!!
+
+nsenter			allows to enter namespaces ! requires container PID (from docker inspect)
+nsenter -m -u -n -p -i -t PID (mount, uts, network, process, ipc namespaces) -t = target
+docker-enter		насколько понял, надо ставить nsenter, нет такой команды
+
+!! docker run -v /usr/local/bin:/target jpetazzo/nsenter
+!! да, для коменд выше надо ставить nsenter, на строку выше - как запустить его контейнером :))
+
+docker exec -it ID/name /bin/bash
+
+  # Building from Dockerfile
+https://www.youtube.com/watch?v=wW9CAH9nSLs
+
+Dockerfile		case sensitive name, plain text,instructions to build image
+
+#Ubuntu based Hello World container
+FROM ubuntu:14.04				первая директива в Dockerfile
+MAINTAINER rudenko@mail.org			хороший тон, опционально
+RUN apt-get update				используем для запуска команд, для установки и т.д.
+# RUN apt-get install -y nginx			просто для примера: каждая инструкция создает слой к образу
+# RUN apt-grt install -y golang			это тоже новый слой... и это не супер...
+CMD ["echo","Hello World !"]			запустим после постройки контейнера
+
+  # Building image
+
+!! ВАЖНО !! когда билдим образ, ВСЕ файлы из каталога с Dockerfile попадут в билд !!
+
+docker build -t helloworld:0.1 .		-t не обязательно, но присваивать тэги нормально !
+
+root@GW01:~/sandbox/d1# docker build -t helloworld:0.1 .
+Sending build context to Docker daemon 2.048 kB
+Sending build context to Docker daemon
+Step 0 : FROM ubuntu:14.04
+ ---> 9bc953763843
+Step 1 : MAINTAINER rudenko@mail.org
+ ---> Running in 71eebfeaf69e
+ ---> 918449b48e28
+Removing intermediate container 71eebfeaf69e
+Step 2 : RUN apt-get update
+ ---> Running in dfdb13dac69c
+Ign http://archive.ubuntu.com trusty InRelease
+Get:1 http://archive.ubuntu.com trusty-updates InRelease [65.9 kB]
+Get:2 http://archive.ubuntu.com trusty-security InRelease [65.9 kB]
+Get:3 http://archive.ubuntu.com trusty Release.gpg [933 B]
+Get:4 http://archive.ubuntu.com trusty Release [58.5 kB]
+Get:5 http://archive.ubuntu.com trusty-updates/main Sources [348 kB]
+Get:6 http://archive.ubuntu.com trusty-updates/restricted Sources [5217 B]
+Get:7 http://archive.ubuntu.com trusty-updates/universe Sources [196 kB]
+Get:8 http://archive.ubuntu.com trusty-updates/main amd64 Packages [979 kB]
+Get:9 http://archive.ubuntu.com trusty-updates/restricted amd64 Packages [23.5 kB]
+Get:10 http://archive.ubuntu.com trusty-updates/universe amd64 Packages [467 kB]
+Get:11 http://archive.ubuntu.com trusty-security/main Sources [148 kB]
+Get:12 http://archive.ubuntu.com trusty-security/restricted Sources [3920 B]
+Get:13 http://archive.ubuntu.com trusty-security/universe Sources [43.2 kB]
+Get:14 http://archive.ubuntu.com trusty-security/main amd64 Packages [618 kB]
+Get:15 http://archive.ubuntu.com trusty-security/restricted amd64 Packages [20.2 kB]
+Get:16 http://archive.ubuntu.com trusty-security/universe amd64 Packages [169 kB]
+Get:17 http://archive.ubuntu.com trusty/main Sources [1335 kB]
+Get:18 http://archive.ubuntu.com trusty/restricted Sources [5335 B]
+Get:19 http://archive.ubuntu.com trusty/universe Sources [7926 kB]
+Get:20 http://archive.ubuntu.com trusty/main amd64 Packages [1743 kB]
+Get:21 http://archive.ubuntu.com trusty/restricted amd64 Packages [16.0 kB]
+Get:22 http://archive.ubuntu.com trusty/universe amd64 Packages [7589 kB]
+Fetched 21.8 MB in 3s (6078 kB/s)
+Reading package lists...
+ ---> 290ef04f58f5
+Removing intermediate container dfdb13dac69c
+Step 3 : CMD echo Hello World !
+ ---> Running in 89859200ffcc
+ ---> 08d19958994e
+Removing intermediate container 89859200ffcc
+Successfully built 08d19958994e
+
+!!!!
+Sending build context to Docker daemon 2.048 kB
+Sending build context to Docker daemon
+Если работаем по сети, можем получить большой трафик между сервером и клинетом
+!!!!
+
+Здесь видно из чего состоит новый образ...
+root@GW01:~/sandbox/d1# docker images --tree
+...
++-39cdc7007d14 Virtual Size: 187.8 MB
+¦ L-460a0b713cac Virtual Size: 188 MB
+¦   L-2aaf3127c72c Virtual Size: 188 MB
+¦     L-3436fb2d153c Virtual Size: 188 MB
+¦       L-9bc953763843 Virtual Size: 188 MB Tags: ubuntu:14.04
+¦         L-918449b48e28 Virtual Size: 188 MB
+¦           L-290ef04f58f5 Virtual Size: 209.8 MB
+¦  	           L-08d19958994e Virtual Size: 209.8 MB Tags: helloworld:0.1	наш контейнер
+
+А здесь даже видно как он был построен ! :)
+root@GW01:~/sandbox/d1# docker history 08d19958994e
+IMAGE               CREATED             CREATED BY                                      SIZE
+08d19958994e        6 minutes ago       /bin/sh -c #(nop) CMD ["echo" "Hello World !"   0 B
+290ef04f58f5        6 minutes ago       /bin/sh -c apt-get update                       21.83 MB
+918449b48e28        6 minutes ago       /bin/sh -c #(nop) MAINTAINER rudenko@mail.org   0 B
+9bc953763843        2 weeks ago         /bin/sh -c #(nop) CMD ["/bin/bash"]             0 B
+3436fb2d153c        2 weeks ago         /bin/sh -c sed -i 's/^#\s*\(deb.*universe\)$/   1.895 kB
+2aaf3127c72c        2 weeks ago         /bin/sh -c rm -rf /var/lib/apt/lists/*          0 B
+460a0b713cac        2 weeks ago         /bin/sh -c set -xe                                                  && echo '#!/bin/sh' > /u   194.5 kB
+39cdc7007d14        2 weeks ago         /bin/sh -c #(nop) ADD file:aca501360d0937bc49   187.8 MB
+
+  # Dockerfiles from Dockerfile
+
+Можно посмотреть как устроены файлы в репозитории Ubuntu, например !
+Хороший набор примеров и опыта !!
+
+  # Working with registers
+
+  # Creating public repo
+Идем на страницу, регистрируемся, заводим. Бесплатно - один публичный репозиторий.
+
+  # Using Our Public Repo on Docker Hub
+
+docker tag ID/name name/repo:version
+
+root@GW01:~/sandbox/d1# docker images
+REPOSITORY          TAG                 IMAGE ID            CREATED              VIRTUAL SIZE
+helloworld          0.1                 08d19958994e        4 hours ago          209.8 MB
+...
+root@GW01:~/sandbox/d1# docker tag  08d19958994e alexrudenko/helloworld:1.0
+root@GW01:~/sandbox/d1# docker images
+REPOSITORY               TAG                 IMAGE ID            CREATED              VIRTUAL SIZE
+alexrudenko/helloworld   1.0                 08d19958994e        4 hours ago          209.8 MB
+helloworld               0.1                 08d19958994e        4 hours ago          209.8 MB
+...
+
+Добавили тэг, чтобы в репозитории лежало все правильно :)
+
+Выкладываем в свой публичный репозиторий:
+
+docker push alexrudenko/helloworld:1.0
+root@GW01:~/sandbox/d1# docker push alexrudenko/helloworld:1.0
+The push refers to a repository [alexrudenko/helloworld] (len: 1)
+08d19958994e: Image push failed
+
+Please login prior to push:
+Username: alexrudenko
+Password:
+Email: pirat_cat@mail.ru
+WARNING: login credentials saved in /root/.dockercfg.
+Login Succeeded
+The push refers to a repository [alexrudenko/helloworld] (len: 1)
+08d19958994e: Image already exists
+290ef04f58f5: Image successfully pushed
+918449b48e28: Image successfully pushed
+9bc953763843: Image successfully pushed
+3436fb2d153c: Image successfully pushed
+2aaf3127c72c: Image successfully pushed
+460a0b713cac: Image successfully pushed
+39cdc7007d14: Image successfully pushed
+Digest: sha256:931e09f6226f2ba2ff5708a505b9d39df781c461160045fc2497f161045404e9
+
+docker rm ID/name		delete container
+
+docker RMI IID			delete image IID
+
+Теперь можем сделать:
+docker pull alexrudenko/helloworld:1.0
+И все, перенесли...
+
+  # Private registries
+Смотреть отдельно.
+
+  # Building a pirvate repo.
+
+------- КАК БЫЛО В КУРСЕ, СЕЙЧАС НЕ ТАК -------
+docker run -d -p 5000:5000 registry		это запуск официального репозитория на python, все могло поменияться
+Когда делаем свой репозиторий, не забываем правильный ресолв DNS.
+
+В моем случае - идем в броузере 77.120.2.199:5000 и видим ответ от сервера...
+
+готовимся выложить на 77.120.2.199:5000
+
+root@GW01:~/sandbox/d1# docker tag  08d19958994e 77.120.2.199:5000/helloworld
+root@GW01:~/sandbox/d1# docker images
+REPOSITORY                     TAG                 IMAGE ID            CREATED              VIRTUAL SIZE
+helloworld                     0.1                 08d19958994e        5 hours ago          209.8 MB
+77.120.2.199:5000/helloworld   latest              08d19958994e        5 hours ago          209.8 MB
+alexrudenko/helloworld         1.0                 08d19958994e        5 hours ago          209.8 MB
+...
+
+------- КАК ДЕЛАЛ -------
+
+СЕРВЕР
+docker run -d -p 5000:5000 --restart=always --name registry registry:2		запуск репозитория
+
+docker pull ubuntu && docker tag ubuntu 77.120.2.199:5000/ubuntu		тестирую сам себя
+docker push 77.120.2.199:5000/ubuntu						
+
+Репозиторий хранится ВНУТРИ контейнера, если надо мэпить папку - мэпим !!! RTFM !
+
+КЛИЕНТ
+
+-ошибка-
+FATA[0000] Error response from daemon: v1 ping attempt failed with error: Get https://77.120.2.199:5000/v1/_ping: local error:record overflow.
+If this private registry supports only HTTP or HTTPS with an unknown CA certificate, please add
+`--insecure-registry 77.120.2.199:5000` to the daemon's arguments. In the case of HTTPS, if you 
+have access to the registry's CA certificate, no need for the flag; simply place the CA
+certificate at /etc/docker/certs.d/77.120.2.199:5000/ca.crt
+
+-исправляем-
+vi /etc/default/docker
+DOCKER_OPTS="--insecure-registry 77.120.2.199:5000"
+service docker restart
+
+docker tag 3b642f673420 77.120.2.199:5000/nsenter
+docker push 77.120.2.199:5000/nsenter
+
+ВСЕ РАБОТАЕТ, в любом случае, при необходимости смотрим сайт и доки :)))
+!!! ДЛЯ CENTOS ВСЕ НЕ ТАК, СМОТРЕТЬ ДОКИ !!!
+
+  # Docker Hub Enterprise (DHE)
++security e.t.c.
+
+  # Dockerfile DEEPER
+
+  # Build Cache
+root@GW01:~/sandbox/d1# docker build -t="build1" .
+Sending build context to Docker daemon 2.048 kB
+Sending build context to Docker daemon
+Step 0 : FROM ubuntu:14.04
+ ---> 9bc953763843
+Step 1 : MAINTAINER rudenko@mail.org
+ ---> Using cache								КЭШ
+ ---> 918449b48e28
+Step 2 : RUN apt-get update
+ ---> Using cache								КЭШ
+ ---> 290ef04f58f5
+Step 3 : CMD echo Hello World !
+ ---> Using cache								КЭШ
+ ---> 08d19958994e
+Successfully built 08d19958994e
+
+После первого билда создает кэш, повторный запуск проверяет,
+выполнялись ли такие инструкции и был ли сгенерирован образ для этих инструкций,
+т.к. если есть, есть кэш и билт проходить очень быстро !
+
+  # Docker files and layers
+
+Учимся считать слои !!!
+
+vi Dockerfile
+
+root@GW01:~/sandbox/d1# cat Dockerfile
+#Ubuntu based Hello World container
+FROM ubuntu:14.04					
+MAINTAINER rudenko@mail.org				new layer 1
+RUN apt-get update					new layer 2
+RUN apt-get install -y apache2				new layer 3
+RUN apt-get install -y golang				new layer 4
+RUN apt-get install -y vim				new layer 5
+CMD ["echo","Hello World !"]				new layer 6
+
+!! КАЖДАЯ команда создала слой !!
+
+docker images --tree
+...
+       L-9bc953763843 Virtual Size: 188 MB Tags: ubuntu:14.04
+         L-918449b48e28 Virtual Size: 188 MB						1
+           L-290ef04f58f5 Virtual Size: 209.8 MB					2
+             L-e1587831a19e Virtual Size: 224.1 MB					3
+              L-932dba94a221 Virtual Size: 398.6 MB					4
+                L-72c83ca502af Virtual Size: 441.9 MB					5
+                  L-1e4cccce0f99 Virtual Size: 441.9 MB Tags: build2:latest		6
+...
+
+root@GW01:~/sandbox/d2# docker history 1e4cccce0f99
+IMAGE               CREATED             CREATED BY                                      SIZE
+1e4cccce0f99        2 minutes ago       /bin/sh -c #(nop) CMD ["echo" "Hello World !"   0 B		6
+72c83ca502af        2 minutes ago       /bin/sh -c apt-get install -y vim               43.3 MB		5
+932dba94a221        2 minutes ago       /bin/sh -c apt-get install -y golang            174.5 MB	4
+e1587831a19e        3 minutes ago       /bin/sh -c apt-get install -y apache2           14.36 MB	3
+290ef04f58f5        23 hours ago        /bin/sh -c apt-get update                       21.83 MB	2
+918449b48e28        23 hours ago        /bin/sh -c #(nop) MAINTAINER rudenko@mail.org   0 B		1
+9bc953763843        2 weeks ago         /bin/sh -c #(nop) CMD ["/bin/bash"]             0 B
+3436fb2d153c        2 weeks ago         /bin/sh -c sed -i 's/^#\s*\(deb.*universe\)$/   1.895 kB
+2aaf3127c72c        2 weeks ago         /bin/sh -c rm -rf /var/lib/apt/lists/*          0 B
+460a0b713cac        2 weeks ago         /bin/sh -c set -xe                                                  && echo '#!/bin/sh' > /u   194.5 kB
+39cdc7007d14        2 weeks ago         /bin/sh -c #(nop) ADD file:aca501360d0937bc49   187.8 MB
+
+  # Build WEBServer with Dickerfile
+
+Dockerfile
+
+#Simple webserver for test
+FROM ubuntu:16.04
+RUN apt-get update
+RUN apt-get install -y apache2
+RUN apt-get install -y apache2-utils
+RUN apt-get install -y vim
+RUN apt-get clean
+EXPOSE 80					Сделать доступным для выставления наружу порт 80
+CMD ["apache2ctl","-D","FOREGROUND"]		
+
+Билдим:
+docker build -t="webserver" .
+
+  # Launching Webserver
+
+root@GW01:~/sandbox/web# docker images
+REPOSITORY                     TAG                 IMAGE ID            CREATED              VIRTUAL SIZE
+webserver                      latest              b17512426143        About a minute ago   288.3 MB
+...
+
+docker run -d -p 80:80 webserver     ВАЖНО !!! -p HOST_PORT:CONTAINER_PORT
+
+ВСЕ работает !!
+root@GW01:~/sandbox/web# docker ps
+CONTAINER ID        IMAGE               COMMAND                CREATED             STATUS              PORTS                NAMES
+6179bb76dd5e        webserver:latest    "apache2ctl -D FOREG   24 seconds ago      Up 23 seconds       0.0.0.0:80->80/tcp   happy_bell
+
+Остановим:
+root@GW01:~/sandbox/web# docker stop happy_bell
+happy_bell
+
+Все, выключился !!
+
+  # Reducing number of layers.
+Уменьшаем количество команд, цепляем все паровозом ! Делаем красиво !!
+
+#Simple webserver for test
+FROM ubuntu:16.04
+RUN apt-get update && apt-get install -y \
+	apache2 \
+	apache2-utils \
+	vim \
+	&& apt-get clean \
+	&& rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+EXPOSE 80
+CMD ["apache2ctl","-D","FOREGROUND"]		
+
+Дальше стандартный Build...
+
+root@GW01:~/sandbox/web-sm# docker history web-sm
+IMAGE               CREATED             CREATED BY                                      SIZE
+a1efed505c44        33 seconds ago      /bin/sh -c #(nop) CMD ["apache2ctl" "-D" "FOR   0 B
+eddc3fe8ff6d        33 seconds ago      /bin/sh -c #(nop) EXPOSE 80/tcp                 0 B
+0420a0ca4201        38 seconds ago      /bin/sh -c apt-get update && apt-get install    128.3 MB
+594b6e305389        2 weeks ago         /bin/sh -c #(nop) CMD ["/bin/bash"]             0 B
+81756f259b61        2 weeks ago         /bin/sh -c sed -i 's/^#\s*\(deb.*universe\)$/   1.895 kB
+ed3bfbcc08f7        2 weeks ago         /bin/sh -c rm -rf /var/lib/apt/lists/*          0 B
+84387ed57eee        2 weeks ago         /bin/sh -c set -xe                                                  && echo '#!/bin/sh' > /u   701 B
+031c24a19e4b        2 weeks ago         /bin/sh -c #(nop) ADD file:025ef672711f22be39   122 MB
+
+!!! Всего один слой не всю установку и т.д. !!!
+
+root@GW01:~/sandbox/web-sm# docker images
+REPOSITORY                     TAG                 IMAGE ID            CREATED              VIRTUAL SIZE
+web-sm                         latest              a1efed505c44        About a minute ago   250.3 MB
+webserver                      latest              b17512426143        22 minutes ago       288.3 MB
+...
+
+sm версия легче и имеет меньше слоев... оптимизация ! :))))
+
+  # The CMD instruction
+
+CMD		Run-time instruction, rus commands in container at launch time
+		Equivalent of docker run <args> <command> | docker run <args> /bin/bash
+
+RUN		Build-time instruction, add layers to imsges, used to install apps
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+-> в Dockerfile может быть только одна активная (=последняя) инструкция CMD !
+-> если в командной строке при запуске контейнера указаны параметры - они приоритетнее CMD инструкции !
+
+CMD	2 способа использовать !!
+
+SHELL FORM
+  команды работают как в шелл, автоматическая подстановка спереди /bin/sh -c
+  CMD echo "hi" =  sh -c echo "hi"
+  CMD echo $var1   будет работать как в shell
+
+EXEC FORM (recommended)
+  JSON array style
+  ["command","arg"]
+	-don't need shell
+	-не будет заморочек с форматированием строк, как в shell
+	-no shell features (no variable expansion, no &&, ||, > ... other special chars)
+
+  # Entrypoint instruction
+По дефолту... и более предпочтительный способ задать приложение, исполняемое в контейнере.
+Не обязаны, но рекомендуется.
+
+ENTRYPOINT
+  -can't be overriden at run-time ... docker run <command> не будет менять исполняемое приложение
+  -docker run <command> , в этом случае <command> рассматривается !! КАК АРГУМЕНТЫ !! к entrypoint
+
+Dockerfile
+FROM ubuntu:16.04
+RUN apt-get update && apt-get install -y iputils-ping
+ENTRYPOINT ["echo"]
+
+docker build -t="hw2" .
+
+root@GW01:~/sandbox/d3# docker run hw2 Fuck !
+Fuck !
+Работает, подставляет аргументы при запуске в виде аргументов ENTRYPOINT
+
+root@GW01:~/sandbox/d3# docker run -it hw2 /bin/bash
+/bin/bash
+Отработало ЭХО !!
+
+Dockerfile
+
+FROM ubuntu:16.04
+RUN apt-get update && apt-get install -y iputils-ping apache2
+ENTRYPOINT ["apache2ctl"]
+
+root@GW01:~/sandbox/d3# docker run -d -p 777:80 web2 -D FOREGROUND
+6938ab9c9bbf3ea942fec2aa45877e499fd358136ad36b5f676906f4fae5379e
+Передаем параметры Apache2 серверу из командной строки !!
+НО МОЖНО ЗАДАТЬ ПАРАМЕТРЫ ПО УМОЛЧАНИЮ, CMD будут как раз так работать,
+если не зададим иное при запуске !!!
+
+Dockerfile
+
+FROM ubuntu:16.04
+RUN apt-get update && apt-get install -y iputils-ping apache2
+ENTRYPOINT ["apache2ctl"]
+CMD ["-D FOREGROUND"]
+
+!!! МОЖНО OVERRIDE ENTRYPOINT через --entrypoint !!! и иногда оно надо !!! НО !!!
+
+  # ENV instructions
+ENV var=value			передать переменную окружения в контейнер
+
+--ПРИМЕР--
+FROM ubuntu:16.04
+RUN apt-get update && apt-get install -y iputils-ping apache2
+ENV var1=alex var2=Rudenko
+
+docker run -it ar /bin/bash
+env	здесь видим наши переменные
+
+
+-- ПРИМЕР --
+FROM ubuntu:16.04
+RUN apt-get update && apt-get install -y iputils-ping apache2
+ENV var1=ping var2=8.8.8.8
+CMD $var1 $var2
+
+root@GW01:~/sandbox/d4# docker build -t="ar" .
+
+root@GW01:~/sandbox/d4# docker run -it ar
+PING 8.8.8.8 (8.8.8.8) 56(84) bytes of data.
+64 bytes from 8.8.8.8: icmp_seq=1 ttl=49 time=34.5 ms
+64 bytes from 8.8.8.8: icmp_seq=2 ttl=49 time=34.6 ms
+64 bytes from 8.8.8.8: icmp_seq=3 ttl=49 time=34.5 ms
+...
+
+root@GW01:~/sandbox/d4# docker run -d ar
+a9b05d237eb96a626671e6ab073e900f33dc3acce7f8e4feba3f2cf10808aeed
+root@GW01:~/sandbox/d4# docker ps
+CONTAINER ID        IMAGE               COMMAND                CREATED             STATUS              PORTS               NAMES
+a9b05d237eb9        ar:latest           "/bin/sh -c '$var1 $   5 seconds ago       Up 4 seconds                            prickly_nobel
+
+						      ^^ здесь переменные не раскрыты, они просто есть
+
+root@GW01:~/sandbox/d4# docker logs -f  prickly_nobel		FOLLOW LOG
+PING 8.8.8.8 (8.8.8.8) 56(84) bytes of data.
+64 bytes from 8.8.8.8: icmp_seq=1 ttl=49 time=34.8 ms
+64 bytes from 8.8.8.8: icmp_seq=2 ttl=49 time=34.6 ms
+...
+
+-- РАБОТАЕТ --
+
+  # Volumes
+docker volume
+  - create
+  - ls
+  - rm
+
+Для разделения данных и приложений, для обмена данными между контейнерами...
+Если контейнер остановлен, удален - данные остаются.
+
+docker run -it -v /test-vol --name=voltainer ubuntu:16/04 /bin/bash
+
+root@GW01:~/sandbox/d4# docker run -it -v /test-vol --name=voltainer ubuntu:16.04 /bin/bash
+root@a22d0a6ae6fd:/# ls
+bin   dev  home  lib64  mnt  proc  run   srv  test-vol  usr
+boot  etc  lib   media  opt  root  sbin  sys  tmp       var
+
+Если test-vol уже был в базовом контейнере, то как в mount, он стал недоступнум, а новый каталог в работе.
+
+Где находится volume можно посмотреть из docker inspect
+
+root@GW01:~/sandbox/d4# docker inspect voltainer
+...
+    "Volumes": {
+        "/test-vol": "/var/lib/docker/vfs/dir/85c35602f2e339d9617564942ec39a22aa947de0c1cd62915df8310a4dbae29f"
+    },
+    "VolumesRW": {
+        "/test-vol": true
+    }
+...
+и там будут наши файлы
+
+ТЕПЕРЬ МОЖНО ЗАПУСТИТЬ ДРУГОЙ КОНТЕЙНЕР С ИСПОЛЬЗОВАНИЕМ ТОМА voltainer:
+
+root@GW01:~/sandbox/d4# docker run -it --volumes-from="voltainer" ubuntu:16.04 /bin/bash
+root@5fc0495c0829:/# ls
+bin   dev  home  lib64  mnt  proc  run   srv  test-vol  usr
+boot  etc  lib   media  opt  root  sbin  sys  tmp       var
+
+А еще можно использовать папки ХОСТА:
+
+docker run -v /data:/data ...				/data(хост):/data(контейнер)
+Это привязывает нас к хосту и не есть супер хорошо....
+
+Тома в Dockerfile:
+VOLUME /data		это не позволит монтировать папки хоста, а как в примере с voltainer
+
+!!! УДАЛЕНИЕ ТОМОВ !!!
+root@GW01:~/sandbox/d4# docker stop voltainer
+voltainer
+root@GW01:~/sandbox/d4# docker rm -v voltainer
+voltainer
+
+Если по другому - данные останутся...
+
+  # Networking
+
+  # Docker 0 bridge
+root@GW01:~/sandbox/d4# ip a
+...
+7: docker0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state UP group default
+    link/ether 0a:00:30:bb:f8:96 brd ff:ff:ff:ff:ff:ff
+    inet 172.17.42.1/16 scope global docker0
+       valid_lft forever preferred_lft forever
+    inet6 fe80::c884:d0ff:fe8e:d134/64 scope link
+       valid_lft forever preferred_lft forever
+149: veth71ee361@if148: <BROADCAST,UP,LOWER_UP> mtu 1500 qdisc noqueue master docker0 state UP group default
+    link/ether 0a:00:30:bb:f8:96 brd ff:ff:ff:ff:ff:ff
+    inet6 fe80::800:30ff:febb:f896/64 scope link
+       valid_lft forever preferred_lft forever
+...
+
+Установим bridge-utils
+
+root@GW01:~/sandbox/d4# apt-get install -y bridge-utils
+
+root@GW01:~/sandbox/d4# brctl show docker0
+bridge name     bridge id               STP enabled     interfaces
+docker0         8000.0a0030bbf896       no              veth2029c52	интерфейсы контейнеров
+                                                        veth3871c58	..
+                                                        veth41825fe	..	
+                                                        veth4adfa18	e.t.c.
+                                                        veth71ee361
+                                                        veth84247dd
+                                                        veth8888d46
+                                                        veth8d142c1
+                                                        vethc78fce3
+
+  # Virtual Ethernet Interfaces
+
+root@GW01:~/sandbox/d5# cat Dockerfile
+#Test for networking module
+FROM ubuntu:14.04
+RUN apt-get update && apt-get install -y iputils-ping traceroute
+ENTRYPOINT ["/bin/bash"]
+
+root@GW01:~/sandbox/d5# docker build -t="net-img" .
+
+root@GW01:~/sandbox/d5# docker run -it --name=net1 net-img
+root@GW01:~/sandbox/d5# docker run -it --name=net2 net-img
+
+Запустили пару контейнеров:
+root@GW01:~/sandbox/d5# docker ps
+CONTAINER ID        IMAGE               COMMAND             CREATED             STATUS              PORTS               NAMES
+d0397cdc652a        net-img:latest      "/bin/bash"         2 minutes ago       Up 2 minutes                            net2
+064b5ad58c9f        net-img:latest      "/bin/bash"         3 minutes ago       Up 3 minutes                            net1
+
+root@GW01:~/sandbox/d5# brctl show docker0
+bridge name     bridge id               STP enabled     interfaces
+docker0         8000.06d7ab610ef8       no              veth491422e
+                                                        veth9c85eae
+
+Видим 2 сетевых интерфейса, подключенных к виртуальному бриджу...
+
+Вид изнутри контейнера:
+root@GW01:~/sandbox/d5# docker attach net1
+root@064b5ad58c9f:/# ip a
+1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN group default
+    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+    inet 127.0.0.1/8 scope host lo
+       valid_lft forever preferred_lft forever
+    inet6 ::1/128 scope host
+       valid_lft forever preferred_lft forever
+174: eth0@if175: <BROADCAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state UP group default
+    link/ether 02:42:ac:11:00:2e brd ff:ff:ff:ff:ff:ff
+    inet 172.17.0.46/16 scope global eth0
+       valid_lft forever preferred_lft forever
+    inet6 fe80::42:acff:fe11:2e/64 scope link
+       valid_lft forever preferred_lft forever
+
+!! ДЛЯ ДОКЕРА ПО УМОЛЧАНИЮ ИСПОЛЬЗУЮТСЯ СЕТИ ИЗ RFC1918 И НЕ ИСПОЛЬЗУЕМЫЕ НАМИ !!
+
+root@064b5ad58c9f:/# traceroute 8.8.8.8
+traceroute to 8.8.8.8 (8.8.8.8), 30 hops max, 60 byte packets
+ 1  172.17.42.1 (172.17.42.1)  0.070 ms  0.013 ms  0.010 ms		такой DG выбрался !
+
+  # Network Configuration
+
+root@GW01:~/sandbox/d5# docker inspect net2
+...
+    "NetworkSettings": {
+        "Bridge": "docker0",
+        "Gateway": "172.17.42.1",
+        "GlobalIPv6Address": "",
+        "GlobalIPv6PrefixLen": 0,
+        "IPAddress": "172.17.0.47",
+        "IPPrefixLen": 16,
+        "IPv6Gateway": "",
+        "LinkLocalIPv6Address": "fe80::42:acff:fe11:2f",
+        "LinkLocalIPv6PrefixLen": 64,
+        "MacAddress": "02:42:ac:11:00:2f",
+        "PortMapping": null,
+        "Ports": {}
+...
+
+root@GW01:~/sandbox/d5# docker ps
+CONTAINER ID        IMAGE               COMMAND             CREATED             STATUS              PORTS               NAMES
+d0397cdc652a        net-img:latest      "/bin/bash"         9 minutes ago       Up 9 minutes                            net2
+Это наш контейнер, как он получил сетевые - понятно, а теперь пойдем и посмотрим, в папку с его метаданнми:
+
+root@GW01:~/sandbox/d5# ls -l /var/lib/docker/containers/d0397cdc652a37891e615b94df4a846e2e42bc38779b707dae45515690f226e4/
+total 28
+-rw-r--r-- 1 root root 1953 Jun 14 09:29 config.json
+-rw------- 1 root root  864 Jun 14 09:30 d0397cdc652a37891e615b94df4a846e2e42bc38779b707dae45515690f226e4-json.log
+-rw-r--r-- 1 root root  499 Jun 14 09:29 hostconfig.json
+-rw-r--r-- 1 root root   13 Jun 14 09:29 hostname
+-rw-r--r-- 1 root root  175 Jun 14 09:29 hosts
+-rw-r--r-- 1 root root  237 Jun 14 09:29 resolv.conf
+-rw-r--r-- 1 root root   71 Jun 14 09:29 resolv.conf.hash
+
+!! ВИДИМ resolv.conf + hosts !!
+!! resolv.conf по умолчанию КОПИЯ resolv.conf ХОСТА !!
+!! hosts -- аналогично !!
+
+root@GW01:~/sandbox/d5# cat /var/lib/docker/containers/d0397cdc652a37891e615b94df4a846e2e42bc38779b707dae45515690f226e4/resolv.conf
+# Dynamic resolv.conf(5) file for glibc resolver(3) generated by resolvconf(8)
+#     DO NOT EDIT THIS FILE BY HAND -- YOUR CHANGES WILL BE OVERWRITTEN
+nameserver 8.8.8.8
+nameserver 82.144.192.40
+nameserver 82.144.192.50
+search volia.net
+
+Вроде как можно править эти файлы на лету, но изменения вроду как сохраянтся пока контейнер запущен.
+
+!!! НО МОЖНО OVERRIDE via CLI !!!
+
+root@GW01:~/sandbox/d5# docker run -it --name=net3 --dns=8.8.4.4 net-img
+
+root@GW01:~/sandbox/d5# docker inspect net3
+...
+        "Dns": [
+            "8.8.4.4"
+...
+
+  # Exposing ports
+Самый частый и простой способ организации взаимодейстаивя между контейнерами.
+
+Dockerfile
+#Test for networking module
+
+FROM ubuntu:14.04
+RUN apt-get update && apt-get install -y iputils-ping traceroute apache2
+EXPOSE 80									разрешить возможность выставить порт 80 из контейнера
+ENTRYPOINT ["apache2ctl"]							запускаемое приложение, PID1
+CMD ["-D","FOREGROUND"]								опции по умолчанию
+
+root@GW01:~/sandbox/d5# docker build -t="apache2" .
+
+root@GW01:~/sandbox/d5# docker run -d -p 5555:80 --name=web1 apache2		запустили apache2 образ, назвали web1 и примэпили порт 5555 хоста к порту 80 контейнера
+
+  # Viewing exposed ports
+
+root@GW01:~/sandbox/d5# docker ps
+CONTAINER ID        IMAGE               COMMAND                CREATED             STATUS              PORTS                  NAMES
+a339bceca770        apache2:latest      "apache2ctl -D FOREG   2 hours ago         Up 2 hours          0.0.0.0:5555->80/tcp   web1
+
+В разделе ports:
+0.0.0.0:5555->80/tcp
+
+root@GW01:~/sandbox/d5# docker port web1
+80/tcp    ->   0.0.0.0:5555
+контейнер        хост
+
+По умолчанию tcp !!
+
+docker run -d -p 5002:80/udp --name=web2 apache2		мэпинг 80 порта контейнера на 0.0.0.0:5002 хоста, все интерфейсы
+
+docker run -d -p 192.168.114.1:5003:80 --name=web4 apache2	мэпинг на конкретный адрес хоста, 192.168.56.50:5003 на хосте, в данном случае
+root@GW01:~/sandbox/d5# docker port web4
+80/tcp -> 192.168.114.1:5003
+
+docker run -P		попытаться примапить все порты, которые перечислены в EXPOSE в Dockerfile (по рэндому, high numbers)
+
+FROM ubuntu:14.04
+RUN apt-get update && apt-get install -y iputils-ping traceroute apache2
+EXPOSE 80 90 100 110 220 330 440
+ENTRYPOINT ["apache2ctl"]
+CMD ["-D","FOREGROUND"]
+
+docker build -tag="apach2mp" .
+docker run -d -P --name=mp1 apach2mp
+
+root@GW01:~/sandbox/d5# docker port mp1
+100/tcp -> 0.0.0.0:32775
+110/tcp -> 0.0.0.0:32776
+220/tcp -> 0.0.0.0:32777
+330/tcp -> 0.0.0.0:32778
+440/tcp -> 0.0.0.0:32779
+80/tcp -> 0.0.0.0:32780
+90/tcp -> 0.0.0.0:32781
+
+  # Linking containers
+ПЛЮС: Более безопасно использовать, т.к. не выставляешь порты из контейнера наружу.
+МИНУС: только между контейнерами !
+
+[SOURCE CONTAINER]				[RECIPIENT CONTAINER]
+EXPOSE 80			>>>		link to source
+не выставляем в run !				получение конфигурации с source
+						может взаимодействовать с source
+
+!!! ДЛЯ СОЗДАНИЯ ЛИНКА ИСПОЛЬЗУЮТСЯ ИМЕНА КОНТЕЙНЕРОВ, ЭТО ВАЖНО !!!
+
+root@GW01:~/sandbox/d5# docker run --name=src -d apache2	сперва запустим SOURCE !
+
+root@GW01:~/sandbox/d5# docker ps
+CONTAINER ID        IMAGE               COMMAND                CREATED             STATUS              PORTS               NAMES
+0a674209bdc9        apache2:latest      "apache2ctl -D FOREG   25 seconds ago      Up 24 seconds       80/tcp              src
+!! ПОРТ 80 ВИДНО, НО ОН НЕ ПРИМАПЛЕН К ХОСТУ !!
+
+root@GW01:~/sandbox/d5docker run --name=rcvr --link=src:src-alias -it ubuntu:16.04 /bin/bash
+
+!!! Запустим RECIEVER... в опции --link ОБЯЗАТЕЛЬНО указать имя (src) и ALIAS (src-alias) !!!
+Вообще они могут совпадать, НО ЗДЕСЬ В ЦЕЛЯХ ОБУЧЕНИЯ !! РАЗНЫЕ !!!
+
+root@GW01:~/sandbox/d5# docker inspect rcvr
+...
+        "Links": [
+            "/src:/rcvr/src-alias"
+...
+
+!! ЕСТЬ ЛИНК от RCVR до SRC !! от SRC до RCVR линка НЕТ !!
+
+root@GW01:~/sandbox/d5# docker attach rcvr
+
+root@c59998e401cc:/# env | grep ALIAS
+SRC_ALIAS_PORT_80_TCP_PROTO=tcp
+SRC_ALIAS_PORT_80_TCP_ADDR=172.17.0.55
+SRC_ALIAS_NAME=/rcvr/src-alias
+SRC_ALIAS_PORT_80_TCP=tcp://172.17.0.55:80
+SRC_ALIAS_PORT_80_TCP_PORT=80
+SRC_ALIAS_PORT=tcp://172.17.0.55:80
+
+!! ТО ЕСТЬ SRC ПЕРЕДАЛ НА RCVR КУЧУ ПЕРЕМЕННЫХ ОКРУЖЕНИЯ !!
+
+root@c59998e401cc:/# cat /etc/hosts
+...
+172.17.0.55     src-alias 0a674209bdc9 src
+
+!! ПОПРАВИЛ ФАЙЛ HOSTS !!
+
+Но зачем это ВСЕ ?? Получаетль может взять значения переменных и сконфигурироваться как надо !
+Можно много получателей или одного получателей к одному источнику... КОРОЧЕ, понадобится = RTFM !!!
+
+
+  # Troubleshooting
+
+  # Docker daemin daemon
+
+	4 modes:
+	  -DEBUG		most verbose
+	  -INFO
+	  -ERROR
+	  -FATAL		less verbose
+
+root@GW01:~/sandbox/d5# service docker stop
+docker stop/waiting
+
+root@GW01:~/sandbox/d5# docker -d -l debug &
+
+И сразу видим кучу сообщение при запуске... на std out по умолчанию,
+поэтому можем:   >> logfile 2>&1
+
+Можно не вбивать в CLI постоянно, а прописать опцией запуска:
+
+vi /etc/default/docker			в этом файле вообще опции запуска сервиса
+DOCKER_OPTS="--log-level=fatal"		например
+
+После этого рестарт процесса.
+Можем посмотреть в ps с какими опциями был запущен процесс !
+
+  # Container logging
+
+docker logs ID/name			можем посмотреть stdout PID1
+docker logs -f ID/name
+
+Если приложение в контейнере пишет лог в файл, то разумно разместить файл где нам надо, в том числе и в контейнере данных и работаь с ним.
+
+  # Planning image builds
+
+Test before Dockerfile, do what you know how to do !
+Можно развернуть голый контейнер и попробовать разворачивать все изнутри (подцепиться в shell)
+Имеет смысл планировать и делать по шагам. Думаем головой !
+
+  # Image troubleshooting
+
+vi Dockerfile
+FROM ubuntu:16.04
+
+RUN apt-get update
+RUN apt-get install -y ping	такого пакета нет...
+
+Пробуем и вываливаемся с ошибкой ! И хорошо, что здесь все понятно из сообщения об ошибке !!
+НО не всегда так очевидно...
+
+К тому же получим что-то  типа:
+docker ps
+REPOSITORY                     TAG                 IMAGE ID            CREATED              VIRTUAL SIZE
+<none>                         <none>              07ccc6ccf80c        43 hours ago         258.9 MB
+Последняя успешно выполненная команда, для которой создан слой !
+!!! И от этой точки можно траблшутить так:
+  docker run -it 07ccc6ccf80c /bin/bash
+!!! и смотреть руками что же внутри !!
+
+  # Network Troubleshooting, Bridge (docker0)
+
+Возможны конфликты, докер может начать выдавать адреса из используемых нами блоков адресов !!!
+При запуске демона можно указать, с какой сети выдавать адреса !!!
+
+service docker stop				остановили
+ip a						смотрим какие адреса на интерфейсах, нам не нравится !
+ip link del docker0				выпиливаем линк !!
+ip a						проверяем
+
+vi /etc/default/docker
+DOCKER-OPTS="--bip=150.150.0.1/24"		bip = bridge ip, указали, что хотим использовать 150.150.0.0/24
+
+service docker start				стартуем
+ip a						проверяем
+!!! После этого стартуем контейнер и получаем адреса уже из нового блока !!!
+
+  # Firewall options
+
+Firewall on the docker host, смотреть на хосте настройки таблиц.
+Не забываем проверить iptables... по умолчанию докер сам по себе не ограничивает контейнеры !
+
+!!! по умолчанию оба true !!!
+--icc=true|false				inter container communication, как контейнеры общаются между собой и демоном
+--iptables=true|false			
+
+iptables -L -v					
+
+По умолчанию правила ACCEPT:
+root@GW01:~/sandbox/d6# iptables -L -v
+Chain INPUT (policy ACCEPT 8472 packets, 1181K bytes)
+ pkts bytes target     prot opt in     out     source               destination
+Chain FORWARD (policy ACCEPT 77 packets, 24800 bytes)
+ pkts bytes target     prot opt in     out     source               destination
+ 123K  446M DOCKER     all  --  any    docker0  anywhere             anywhere
+ 122K  446M ACCEPT     all  --  any    docker0  anywhere             anywhere             ctstate RELATED,ESTABLISHED
+94044 7463K ACCEPT     all  --  docker0 !docker0  anywhere             anywhere
+    0     0 ACCEPT     all  --  docker0 docker0  anywhere             anywhere
+Chain OUTPUT (policy ACCEPT 9295 packets, 1803K bytes)
+ pkts bytes target     prot opt in     out     source               destination
+Chain DOCKER (1 references)
+ pkts bytes target     prot opt in     out     source               destination
+
+
+DOCKER_OPTS="--icc=false"			будет блокировать докер-докер взаимодействие, добавит правила в iptables
+
+iptables -L -v
+Chain INPUT (policy ACCEPT 76 packets, 3308 bytes)
+ pkts bytes target     prot opt in     out     source               destination
+Chain FORWARD (policy ACCEPT 0 packets, 0 bytes)
+ pkts bytes target     prot opt in     out     source               destination
+    0     0 DROP       all  --  docker0 docker0  anywhere             anywhere
+ 123K  446M DOCKER     all  --  any    docker0  anywhere             anywhere
+ 122K  446M ACCEPT     all  --  any    docker0  anywhere             anywhere             ctstate RELATED,ESTABLISHED
+94044 7463K ACCEPT     all  --  docker0 !docker0  anywhere             anywhere
+Chain OUTPUT (policy ACCEPT 139 packets, 15128 bytes)
+ pkts bytes target     prot opt in     out     source               destination
+Chain DOCKER (1 references)
+ pkts bytes target     prot opt in     out     source               destination
+
+Видим, что добавлено правило DROP !!
+
+DOCKER_OPTS="--iptables=false"			разрешено ли изменять iptables, тут запрещено
+
+
+  ### RECAP ###
+
+docker version		info, client/server version
+docker info		# of images (layers), aufs (storage driver), Libcontainer or LXC, root dir, kernel version
+docker images		locally stored images (images)
+docker images --tree	tree view of images structure
+docker history		commands histroy, during container creation and operations
+docker pull		pull image, tags (1 image = many tags), exact version of image
+docker ps		runnig containers, ports, names, images, starting command
+docker ps -a		all conteiners, ever started
+docker start ID/name	start ID/name container
+docker build		build from Dockerfile (FROM, RUN, EXPOSE, ENTRYPOINT, CMD...), optimize layers
+docker run		run container from image
